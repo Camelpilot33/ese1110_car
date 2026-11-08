@@ -681,7 +681,9 @@ def test_sweep_settle_timed_and_advance():
     sw.on_restart()
     assert sw.on_lap(4.5).kind == "restart"          # standing start not counted
     assert [sw.on_lap(t).kind for t in (3.0, 2.9, 2.8)] == ["settle", "timed", "timed"]
-    assert sw.done and sw.on_lap(2.7).kind == "done"
+    assert sw.done
+    after = sw.on_lap(2.7)
+    assert after.kind == "done" and after.settings == {"speed_max": 0.50, "speed_min": 0.44}
     s = sw.summary()
     assert [r["n"] for r in s] == [2, 2] and s[1]["mean"] == pytest.approx(2.85)
     assert sw.best() == {"speed_max": 0.50, "speed_min": 0.44}

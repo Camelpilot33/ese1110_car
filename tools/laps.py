@@ -54,11 +54,17 @@ def load_laps(run: Path) -> list:
             s1, s2 = setting_at(t1 + 1e-6), setting_at(t2 - 1e-6)
             kind = "restart" if stopped else ("changed" if s1 != s2 else "timed")
             laps.append(dict(t=t1 - t0, duration=t2 - t1, kind=kind, speed_max=s1[0], speed_min=s1[1]))
-    timed = [l["duration"] for l in laps if l["kind"] == "timed"]
-    if timed:
-        med = statistics.median(timed)
-        for l in laps:
-            if l["kind"] == "timed" and not (0.85 * med <= l["duration"] <= 1.15 * med):
+    # mis-timed presses: compare with laps at the SAME settings (a slow
+    # combination is not a mis-timed press)
+    groups = {}
+    for l in laps:
+        if l["kind"] in ("timed", "done"):
+            groups.setdefault((l["speed_max"], l["speed_min"]), []).append(l["duration"])
+    for l in laps:
+        g = groups.get((l["speed_max"], l["speed_min"]))
+        if l["kind"] in ("timed", "done") and g and len(g) >= 3:
+            med = statistics.median(g)
+            if not (0.85 * med <= l["duration"] <= 1.15 * med):
                 l["kind"] = "mistimed"
     return laps
 
@@ -66,11 +72,11 @@ def load_laps(run: Path) -> list:
 def summarise(laps: list) -> list:
     groups = {}
     for l in laps:
-        if l["kind"] == "timed":
-            groups.setdefault((l["speed_max"], l["speed_min"]), []).append(l["duration"])
+        if l["kind"] in ("timed", "done"):
+            groups.setdefault((l["speed_max"], l["speed_min"], l["kind"]), []).append(l["duration"])
     rows = []
-    for (mx, mn), d in sorted(groups.items()):
-        rows.append(dict(speed_max=mx, speed_min=mn, n=len(d), mean=statistics.mean(d), best=min(d),
+    for (mx, mn, kind), d in sorted(groups.items()):
+        rows.append(dict(speed_max=mx, speed_min=mn, kind=kind, n=len(d), mean=statistics.mean(d), best=min(d),
                          sd=statistics.pstdev(d) if len(d) > 1 else 0.0))
     return rows
 
@@ -90,9 +96,10 @@ def main():
     rows = summarise(laps)
     counts = {k: sum(1 for l in laps if l["kind"] == k) for k in {l["kind"] for l in laps}}
     print(f"{len(laps)} laps: {counts}")
-    print(f"{'speed_max':>9} {'speed_min':>9} {'n':>3} {'mean':>7} {'best':>7} {'sd':>6}")
+    print(f"{'speed_max':>9} {'speed_min':>9} {'laps':>8} {'n':>3} {'mean':>7} {'best':>7} {'sd':>6}")
     for r in rows:
-        print(f"{r['speed_max']:>9} {r['speed_min']:>9} {r['n']:>3} {r['mean']:7.3f} {r['best']:7.3f} {r['sd']:6.3f}")
+        label = "sweep" if r["kind"] == "timed" else "after"
+        print(f"{r['speed_max']:>9} {r['speed_min']:>9} {label:>8} {r['n']:>3} {r['mean']:7.3f} {r['best']:7.3f} {r['sd']:6.3f}")
     if args.json:
         json.dump({"laps": laps, "summary": rows}, open(args.json, "w"), indent=1)
 

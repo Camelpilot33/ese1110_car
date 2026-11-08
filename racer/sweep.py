@@ -76,7 +76,8 @@ class Sweep:
 
     def on_lap(self, duration: float) -> LapRecord:
         if self.done:
-            rec = LapRecord(duration, len(self.combos) - 1, dict(self.combos[-1]), "done")
+            # after the sweep the car drives on the fastest combination
+            rec = LapRecord(duration, -1, dict(self.best() or self.combos[-1]), "done")
             self.records.append(rec)
             return rec
         settings = dict(self.current)
