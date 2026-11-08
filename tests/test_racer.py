@@ -480,3 +480,16 @@ def test_lookahead_never_extrapolates(prof):
     est = TrackEstimate(valid=True, coeffs=np.array([0.0, 1.4, -2.7]), y_min=0.25, y_max=0.54)
     x, y = lookahead_point(est, 0.7)
     assert y <= 0.54 + 1e-9
+
+
+def test_soft_start_ramp(prof):
+    c = prof.control
+    c.mode, c.start_ramp_s, c.speed_max, c.speed_min = "pid", 1.0, 0.55, 0.38
+    est = Vision(prof.vision, W, H).process(render(prof, [straight(-0.3), straight(0.3)]))
+    ctrl = Controller(c)
+    ctrl.on_start(10.0)
+    th = [ctrl.update(est, 10.0 + t).throttle for t in (0.0, 0.5, 1.0, 1.5)]
+    assert th[0] == pytest.approx(0.38, abs=1e-6)          # starts at the floor
+    assert 0.38 < th[1] < th[2]
+    assert th[3] == pytest.approx(ctrl.update(est, 11.6).throttle, abs=1e-3)  # ramp finished
+    assert th[3] > 0.5

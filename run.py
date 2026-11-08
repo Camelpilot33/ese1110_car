@@ -67,6 +67,7 @@ def main(argv=None) -> int:
     signal.signal(signal.SIGTERM, _sigterm)
 
     mode = args.mode
+    was_ok = False
     sc = prof.safety
     idx = -1
     loop_ms: list = []
@@ -132,6 +133,17 @@ def main(argv=None) -> int:
                               speed_min=ctrl.cfg.speed_min,
                               turn_throttle=ctrl.cfg.turn_throttle, lookahead_m=ctrl.cfg.lookahead_m)
 
+            ok = gate.allowed(now, pad.held(sc.deadman_button), pad.connected,
+                              now - t_frame, mode == "auto")
+            if ok and not was_ok and mode == "auto":
+                # Fresh start (dead-man pressed): forget stale state and
+                # soft-start, so the car settles on the line before speeding up.
+                vision.reset()
+                ctrl.on_start(now)
+                if log:
+                    log.event("start", mode=mode)
+            was_ok = ok
+
             est = vision.process(img, keep_mask=stream is not None)
             if mode == "auto":
                 cmd = ctrl.update(est, now)
@@ -139,8 +151,6 @@ def main(argv=None) -> int:
                 cmd = Command(steering=pad.axis("rjx"),
                               throttle=-pad.axis("ljy") * sc.manual_throttle_scale)
 
-            ok = gate.allowed(now, pad.held(sc.deadman_button), pad.connected,
-                              now - t_frame, mode == "auto")
             throttle = cmd.throttle if ok else 0.0
             act.set(cmd.steering, throttle)
 

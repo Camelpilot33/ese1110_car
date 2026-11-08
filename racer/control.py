@@ -124,8 +124,34 @@ class Controller:
         self._f = 0.0
         self._last_t: Optional[float] = None
         self.pid = PID(cfg.kp, cfg.ki, cfg.kd, cfg.i_limit, cfg.d_filter)
+        self._start_t: Optional[float] = None
+
+    def on_start(self, now: float) -> None:
+        """Called when the car is (re)started: drop state from the previous
+        drive and begin the soft-start throttle ramp."""
+        self.phase = STRAIGHT
+        self._exit_count = 0
+        self._brake_until = 0.0
+        self._steer = 0.0
+        self._f = 0.0
+        self._last_t = None
+        self.pid.reset()
+        self._start_t = now
 
     def update(self, est: TrackEstimate, now: float) -> Command:
+        cmd = self._update(est, now)
+        ramp = self.cfg.start_ramp_s
+        if self._start_t is not None and ramp > 0 and cmd.throttle > 0:
+            frac = (now - self._start_t) / ramp
+            if frac >= 1.0:
+                self._start_t = None
+            else:
+                floor = self.cfg.speed_min if self.cfg.mode == "pid" else self.cfg.turn_throttle
+                if cmd.throttle > floor:
+                    cmd.throttle = floor + (cmd.throttle - floor) * max(0.0, frac)
+        return cmd
+
+    def _update(self, est: TrackEstimate, now: float) -> Command:
         cfg = self.cfg
         if not est.valid:
             lost = now - self._last_valid_t > cfg.lost_hold_s

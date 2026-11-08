@@ -57,6 +57,7 @@ actuators:
 control:
   mode: pure_pursuit
   track_direction: both
+  start_ramp_s: 0.0
   kp: 1.2
   ki: 0.3
   kd: 0.08

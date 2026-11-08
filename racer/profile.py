@@ -101,6 +101,7 @@ class ActuatorCfg:
 class ControlCfg:
     mode: str = "pure_pursuit"       # pure_pursuit | pid
     track_direction: str = "both"    # left | right | both: wrong-way bend readings are ignored
+    start_ramp_s: float = 0.0        # after each start, throttle ramps from the turn floor over this time
     # --- pid mode: steering = PID on heading error (rad) to the lookahead point
     kp: float = 1.2
     ki: float = 0.3
