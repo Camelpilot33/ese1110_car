@@ -628,4 +628,4 @@ def test_mpc_is_fast(prof):
     t = time.perf_counter()
     for i in range(100):
         ctrl.update(est, i / 60)
-    assert (time.perf_counter() - t) / 100 < 0.005      # laptop; Pi ~3x slower
+    assert (time.perf_counter() - t) / 100 < 0.012      # Pi 4 measured ~4.5 ms; margin for load
