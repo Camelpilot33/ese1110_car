@@ -53,11 +53,11 @@ actuators:
   throttle_forward_us: 2035
   throttle_stop_us: 1506
   throttle_reverse_us: 1302
-  throttle_max: 0.65
+  throttle_max: 0.6
   reverse_max: 0.5
   ina219_addr: 66
 control:
-  mode: mpc
+  mode: pid
   mpc:
     horizon_n: 10
     margin_m: 0.05
@@ -93,7 +93,7 @@ control:
     max_coast: 6
     line_blend: 0.7
   track_direction: left
-  steer_min: -1.0
+  steer_min: -1.476878612716763
   steer_max: 1.0
   start_ramp_s: 1.5
   kp: 1.0
