@@ -368,3 +368,51 @@ def test_mask_runs_matches_row_runs():
     r, u = mask_runs(m, 2)
     for i in range(20):
         assert list(u[r == i]) == row_runs(m[i], 2)
+
+
+def test_understeer_limiter(prof):
+    from racer.vision import TrackEstimate
+    est = TrackEstimate(valid=True, coeffs=np.array([-0.5, 0.0, 0.0]), y_min=0.2, y_max=1.0,
+                        center_pts=np.c_[np.full(6, -0.5), np.linspace(0.2, 1.0, 6)])
+    c = prof.control
+    c.straight_throttle = c.turn_throttle = 0.4
+    free = Controller(c).update(est, 0.0)
+    assert free.steering < -0.98 and free.throttle == pytest.approx(0.4)
+    c.sat_threshold, c.sat_throttle_drop = 0.85, 0.06
+    assert Controller(c).update(est, 0.0).throttle == pytest.approx(0.34, abs=1e-6)
+
+
+def _offset_est(x):
+    from racer.vision import TrackEstimate
+    return TrackEstimate(valid=True, coeffs=np.array([x, 0.0, 0.0]), y_min=0.2, y_max=1.0,
+                         center_pts=np.c_[np.full(6, x), np.linspace(0.2, 1.0, 6)])
+
+
+def test_pid_steers_toward_line_and_integrates(prof):
+    c = prof.control
+    c.mode, c.kp, c.ki, c.kd = "pid", 1.0, 0.5, 0.0
+    ctrl = Controller(c)
+    first = ctrl.update(_offset_est(-0.1), 0.0).steering
+    assert first < 0                                   # centre to the left -> steer left
+    later = [ctrl.update(_offset_est(-0.1), 0.05 * i).steering for i in range(1, 20)]
+    assert later[-1] < first                           # integral builds on a steady error
+
+
+def test_pid_derivative_damps(prof):
+    c = prof.control
+    c.mode, c.kp, c.ki, c.kd, c.d_filter = "pid", 1.0, 0.0, 0.5, 0.0
+    ctrl = Controller(c)
+    ctrl.update(_offset_est(-0.2), 0.0)
+    s = ctrl.update(_offset_est(-0.1), 0.05).steering   # error shrinking -> D opposes P
+    assert s > -math.atan2(0.1, 0.7) * 1.0
+
+
+def test_pid_speed_output(prof):
+    c = prof.control
+    c.mode = "pid"
+    ctrl = Controller(c)
+    straight_cmd = ctrl.update(Vision(prof.vision, W, H).process(render(prof, [straight(-0.3), straight(0.3)])), 0.0)
+    assert straight_cmd.throttle > c.speed_max - 0.01
+    turn_cmd = Controller(c).update(Vision(prof.vision, W, H).process(
+        render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)])), 0.0)
+    assert c.speed_min <= turn_cmd.throttle < straight_cmd.throttle - 0.05

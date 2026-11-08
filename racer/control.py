@@ -1,4 +1,12 @@
-"""Pure pursuit steering + straight/turn speed profile. No hardware imports."""
+"""Steering + speed control. No hardware imports.
+
+Two modes (control.mode):
+  pure_pursuit  geometric steering to the lookahead point; throttle blends
+                between straight_throttle and turn_throttle
+  pid           PID on the heading error to the lookahead point; speed is a
+                controller output: speed_max minus slow-downs for an upcoming
+                turn, steering effort and tracking error
+"""
 from __future__ import annotations
 
 import math
@@ -22,6 +30,7 @@ class Command:
     phase: str = STRAIGHT
     lost: bool = False
     turn_factor: float = 0.0
+    error: float = 0.0           # heading error to target (rad, + = right)
 
 
 def lookahead_point(est: TrackEstimate, ld: float) -> Tuple[float, float]:
@@ -58,6 +67,31 @@ def preview_curvature(est: TrackEstimate, preview_m: float) -> float:
     return 2.0 * x / d2 if d2 > 1e-6 else 0.0
 
 
+class PID:
+    """PID with derivative-on-measurement (low-pass filtered) and a clamped
+    integral (anti-windup)."""
+
+    def __init__(self, kp: float, ki: float, kd: float, i_limit: float, d_filter: float):
+        self.kp, self.ki, self.kd = kp, ki, kd
+        self.i_limit, self.d_filter = i_limit, d_filter
+        self.reset()
+
+    def reset(self) -> None:
+        self.integral = 0.0
+        self.prev_e: Optional[float] = None
+        self.d = 0.0
+
+    def update(self, e: float, dt: float) -> float:
+        if self.prev_e is not None and dt > 0:
+            raw = (e - self.prev_e) / dt
+            a = self.d_filter
+            self.d = a * self.d + (1 - a) * raw
+        self.prev_e = e
+        if dt > 0:
+            self.integral = float(np.clip(self.integral + e * dt, -self.i_limit, self.i_limit))
+        return self.kp * e + self.ki * self.integral + self.kd * self.d
+
+
 class Controller:
     def __init__(self, cfg: ControlCfg):
         self.cfg = cfg
@@ -67,11 +101,16 @@ class Controller:
         self._last_valid_t = -1e9
         self._steer = 0.0
         self._f = 0.0
+        self._last_t: Optional[float] = None
+        self.pid = PID(cfg.kp, cfg.ki, cfg.kd, cfg.i_limit, cfg.d_filter)
 
     def update(self, est: TrackEstimate, now: float) -> Command:
         cfg = self.cfg
         if not est.valid:
             lost = now - self._last_valid_t > cfg.lost_hold_s
+            if lost:
+                self.pid.reset()
+                self._last_t = None
             return Command(steering=0.0 if lost else self._steer,
                            throttle=0.0 if lost else cfg.turn_throttle,
                            phase=self.phase, lost=lost)
@@ -89,6 +128,12 @@ class Controller:
         self._f = f_raw if f_raw >= self._f else a_f * self._f + (1 - a_f) * f_raw
         f = self._f
 
+        dt = 0.0 if self._last_t is None else min(now - self._last_t, 0.2)
+        self._last_t = now
+
+        if cfg.mode == "pid":
+            return self._pid_step(est, kappa, f, dt, now)
+
         if now < self._brake_until:
             throttle = cfg.brake_throttle
         elif cfg.speed_blend:
@@ -100,13 +145,50 @@ class Controller:
 
         # Longer lookahead at higher throttle keeps pure pursuit stable.
         ld = cfg.lookahead_m + cfg.lookahead_speed_gain * max(0.0, throttle - cfg.lookahead_ref_throttle)
-        tx, ty = lookahead_point(est, ld)
-        if cfg.racing_line_offset_m:
-            tx += math.copysign(cfg.racing_line_offset_m * f, kappa)  # toward the inside
+        tx, ty = self._target(est, ld, kappa, f)
         steer = pure_pursuit(tx, ty, cfg.wheelbase_m, math.radians(cfg.max_steer_deg))
         a = cfg.steer_smoothing
         self._steer = a * self._steer + (1 - a) * steer
-        return Command(self._steer, throttle, (tx, ty), kappa, self.phase, turn_factor=f)
+        throttle = self._limit_saturation(throttle)
+        return Command(self._steer, throttle, (tx, ty), kappa, self.phase, turn_factor=f,
+                       error=math.atan2(tx, ty))
+
+    def _target(self, est: TrackEstimate, ld: float, kappa: float, f: float) -> Tuple[float, float]:
+        tx, ty = lookahead_point(est, ld)
+        if self.cfg.racing_line_offset_m:
+            tx += math.copysign(self.cfg.racing_line_offset_m * f, kappa)  # toward the inside
+        return tx, ty
+
+    def _limit_saturation(self, throttle: float) -> float:
+        """Near full lock the car cannot turn any tighter: shed speed so it
+        can hold the line instead of running wide (understeer limiter)."""
+        cfg = self.cfg
+        over = abs(self._steer) - cfg.sat_threshold
+        if over > 0 and throttle > 0 and cfg.sat_throttle_drop:
+            throttle = max(0.0, throttle - cfg.sat_throttle_drop * over / max(1e-6, 1 - cfg.sat_threshold))
+        return throttle
+
+    def _pid_step(self, est: TrackEstimate, kappa: float, f: float, dt: float, now: float) -> Command:
+        cfg = self.cfg
+        tx, ty = self._target(est, cfg.lookahead_m, kappa, f)
+        e = math.atan2(tx, ty)                       # heading error to target, + = right
+        steer = float(np.clip(self.pid.update(e, dt), -1.0, 1.0))
+        a = cfg.steer_smoothing
+        self._steer = a * self._steer + (1 - a) * steer
+
+        # Speed is a controller output: full speed when the road ahead is
+        # straight and the car is tracking well; slower for a coming turn
+        # (anticipation), for steering effort and for tracking error.
+        speed = (cfg.speed_max
+                 - cfg.speed_turn_drop * f
+                 - cfg.speed_steer_drop * abs(self._steer)
+                 - cfg.speed_error_drop * abs(e))
+        speed = self._limit_saturation(speed)
+        # Never below speed_min: the car stalls under ~0.35 and would stop mid-turn.
+        speed = float(np.clip(speed, cfg.speed_min, cfg.speed_max))
+        if now < self._brake_until:
+            speed = cfg.brake_throttle
+        return Command(self._steer, speed, (tx, ty), kappa, self.phase, turn_factor=f, error=e)
 
     def _update_phase(self, kappa: float, now: float) -> None:
         cfg = self.cfg

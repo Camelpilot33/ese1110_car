@@ -50,10 +50,21 @@ actuators:
   throttle_forward_us: 2035
   throttle_stop_us: 1506
   throttle_reverse_us: 1302
-  throttle_max: 0.45
+  throttle_max: 0.5
   reverse_max: 0.5
   ina219_addr: 66
 control:
+  mode: pid
+  kp: 1.0
+  ki: 0.3
+  kd: 0.1
+  i_limit: 0.5
+  d_filter: 0.6
+  speed_max: 0.45
+  speed_min: 0.36
+  speed_turn_drop: 0.06
+  speed_steer_drop: 0.04
+  speed_error_drop: 0.05
   wheelbase_m: 0.26
   max_steer_deg: 35
   lookahead_m: 0.7
@@ -71,6 +82,8 @@ control:
   turn_factor_smoothing: 0.5
   lookahead_speed_gain: 1.0
   lookahead_ref_throttle: 0.36
+  sat_threshold: 0.85
+  sat_throttle_drop: 0.06
   lost_hold_s: 0.25
 safety:
   deadman_button: rb

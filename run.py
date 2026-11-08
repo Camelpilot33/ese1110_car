@@ -9,7 +9,7 @@ Gamepad (F710, X/XInput mode):
   right stick X  steering (manual)    left stick Y  throttle (manual)
   X  toggle manual/auto    B  e-stop (latched)    START  clear e-stop
   A  mark a lap (press as the car crosses the start line)
-  D-pad up/down     +/- 0.02 on straight and turn throttle (live, logged)
+  D-pad up/down     +/- 0.02 on speed_max (pid mode) or straight+turn throttle (live, logged)
   D-pad left/right  -/+ 0.05 m lookahead (live, logged)
 """
 from __future__ import annotations
@@ -100,6 +100,11 @@ def main(argv=None) -> int:
                     mode = "auto" if mode == "manual" else "manual"
                     vision.reset()
                     print(f"mode -> {mode}")
+                elif b in ("dpad_up", "dpad_down") and ctrl.cfg.mode == "pid":
+                    d = 0.02 if b == "dpad_up" else -0.02
+                    c = ctrl.cfg
+                    c.speed_max = round(min(prof.actuators.throttle_max, max(c.speed_min, c.speed_max + d)), 3)
+                    print(f"speed_max={c.speed_max} (min {c.speed_min}, cap {prof.actuators.throttle_max})")
                 elif b in ("dpad_up", "dpad_down"):
                     d = 0.02 if b == "dpad_up" else -0.02
                     cap = prof.actuators.throttle_max
@@ -118,7 +123,7 @@ def main(argv=None) -> int:
                     last_lap_t = now
                 if log:
                     log.event("button", button=b, mode=mode,
-                              straight_throttle=ctrl.cfg.straight_throttle,
+                              straight_throttle=ctrl.cfg.straight_throttle, speed_max=ctrl.cfg.speed_max,
                               turn_throttle=ctrl.cfg.turn_throttle, lookahead_m=ctrl.cfg.lookahead_m)
 
             est = vision.process(img, keep_mask=stream is not None)
@@ -143,7 +148,7 @@ def main(argv=None) -> int:
                 log.log({"t": now, "frame": idx, "mode": mode, "steering": round(cmd.steering, 4),
                          "throttle": round(throttle, 4), "cmd_throttle": round(cmd.throttle, 4),
                          "ok": ok, "why": gate.reasons, "phase": cmd.phase, "lost": cmd.lost,
-                         "kappa": round(cmd.kappa_preview, 3), "turn_f": round(cmd.turn_factor, 3), "target": cmd.target,
+                         "kappa": round(cmd.kappa_preview, 3), "turn_f": round(cmd.turn_factor, 3), "err": round(cmd.error, 4), "target": cmd.target,
                          "loop_ms": round(dt_ms, 2), "latency_ms": round(latency_ms, 2),
                          "battery_v": volts, "vision": est.summary()}, img)
             if stream:
@@ -173,8 +178,8 @@ def main(argv=None) -> int:
         if loop_ms:
             print(f"loop ms: mean {statistics.mean(loop_ms):.1f}  max {max(loop_ms):.1f}")
         c = ctrl.cfg
-        print(f"final: straight_throttle={c.straight_throttle} turn_throttle={c.turn_throttle} "
-              f"lookahead_m={c.lookahead_m}  (copy into the profile to keep)")
+        print(f"final: mode={c.mode} speed_max={c.speed_max} straight_throttle={c.straight_throttle} "
+              f"turn_throttle={c.turn_throttle} lookahead_m={c.lookahead_m}  (copy into the profile to keep)")
         if laps:
             print(f"laps: {len(laps)}  best {min(laps):.3f}  "
                   f"mean of last 5 {statistics.mean(laps[-5:]):.3f}")
