@@ -49,16 +49,16 @@ actuators:
   throttle_forward_us: 2035
   throttle_stop_us: 1506
   throttle_reverse_us: 1302
-  throttle_max: 0.35
+  throttle_max: 0.45
   reverse_max: 0.5
   ina219_addr: 66
 control:
   wheelbase_m: 0.26
-  max_steer_deg: 25.0
-  lookahead_m: 0.6
+  max_steer_deg: 18
+  lookahead_m: 0.8
   steer_smoothing: 0.0
-  straight_throttle: 0.18
-  turn_throttle: 0.18
+  straight_throttle: 0.36
+  turn_throttle: 0.36
   brake_preview_m: 1.2
   turn_kappa_enter: 1.0
   turn_kappa_exit: 0.6

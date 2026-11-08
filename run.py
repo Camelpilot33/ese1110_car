@@ -102,8 +102,9 @@ def main(argv=None) -> int:
                     print(f"mode -> {mode}")
                 elif b in ("dpad_up", "dpad_down"):
                     d = 0.02 if b == "dpad_up" else -0.02
-                    ctrl.cfg.straight_throttle = round(ctrl.cfg.straight_throttle + d, 3)
-                    ctrl.cfg.turn_throttle = round(ctrl.cfg.turn_throttle + d, 3)
+                    cap = prof.actuators.throttle_max
+                    ctrl.cfg.straight_throttle = round(min(cap, max(0.0, ctrl.cfg.straight_throttle + d)), 3)
+                    ctrl.cfg.turn_throttle = round(min(cap, max(0.0, ctrl.cfg.turn_throttle + d)), 3)
                     print(f"throttle straight={ctrl.cfg.straight_throttle} turn={ctrl.cfg.turn_throttle}"
                           f" (cap {prof.actuators.throttle_max})")
                 elif b in ("dpad_left", "dpad_right"):
