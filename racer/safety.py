@@ -135,9 +135,15 @@ class SafetyGate:
     estop: bool = False
     run_started: Optional[float] = None
     reasons: List[str] = field(default_factory=list)
+    _last_held: float = -1e9
 
     def allowed(self, now: float, deadman: bool, connected: bool,
                 frame_age: float, auto: bool) -> bool:
+        # Debounce releases: brief dropouts of the button do not stop the car.
+        if deadman and connected:
+            self._last_held = now
+        elif connected and now - self._last_held < self.cfg.deadman_grace_s:
+            deadman = True
         r = []
         if not connected:
             r.append("no_gamepad")

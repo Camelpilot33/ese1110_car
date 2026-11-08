@@ -121,6 +121,7 @@ class SafetyCfg:
     mode_button: str = "x"
     lap_button: str = "a"
     frame_timeout_s: float = 0.10
+    deadman_grace_s: float = 0.20    # ignore RB releases shorter than this (F710 wireless dropouts)
     max_run_s: float = 0.0           # 0 = no limit; auto mode stops after this
     battery_min_v: float = 7.0
     manual_throttle_scale: float = 0.3

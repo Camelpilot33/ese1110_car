@@ -74,6 +74,7 @@ safety:
   mode_button: x
   lap_button: a
   frame_timeout_s: 0.1
+  deadman_grace_s: 0.2
   max_run_s: 0.0
   battery_min_v: 7.0
   manual_throttle_scale: 0.3

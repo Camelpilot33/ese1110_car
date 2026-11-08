@@ -257,7 +257,7 @@ def test_pulse_mapping_and_caps():
 # --- safety ------------------------------------------------------------------
 
 def test_safety_gate():
-    g = SafetyGate(SafetyCfg(max_run_s=5))
+    g = SafetyGate(SafetyCfg(max_run_s=5, deadman_grace_s=0))
     assert g.allowed(0, True, True, 0.02, auto=True)
     assert not g.allowed(1, False, True, 0.02, auto=True) and g.reasons == ["deadman"]
     assert not g.allowed(1, True, True, 0.5, auto=True) and "stale_frame" in g.reasons
@@ -306,3 +306,14 @@ def test_left_only_track_keeps_two_lines(prof):
     est = Vision(prof.vision, W, H).process(render(prof, [straight(-0.3), straight(0.3)]))
     assert len(est.left_pts) > 3 and len(est.right_pts) > 3
     assert abs(est.x_at(0.6)) < 0.03
+
+
+def test_deadman_grace():
+    g = SafetyGate(SafetyCfg(deadman_grace_s=0.2))
+    assert g.allowed(0.0, True, True, 0.02, auto=True)
+    assert g.allowed(0.1, False, True, 0.02, auto=True)        # brief dropout ignored
+    assert not g.allowed(0.25, False, True, 0.02, auto=True)   # real release stops
+    assert g.allowed(0.3, True, True, 0.02, auto=True)
+    assert not g.allowed(0.35, False, False, 0.02, auto=True)  # disconnect: no grace
+    g.estop = True
+    assert not g.allowed(0.4, True, True, 0.02, auto=True)     # e-stop is immediate
