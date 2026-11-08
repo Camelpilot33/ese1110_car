@@ -8,7 +8,9 @@ Gamepad (F710, X/XInput mode):
   RB (hold)   dead-man: motor runs only while held
   right stick X  steering (manual)    left stick Y  throttle (manual)
   X  toggle manual/auto    B  e-stop (latched)    START  clear e-stop
-  A  mark a lap (press as the car crosses the start line)
+  A  mark a lap (press as the car crosses the start line); a lap in which the car was
+     stopped is not counted
+  --sweep MAX:MIN,...  automatic speed sweep (pid): 1 settle + 5 timed laps per combination
   D-pad up/down     +/- 0.02 on speed_max (pid mode) or straight+turn throttle (live, logged)
   D-pad left/right  -/+ 0.02 speed_min / turn floor (pid mode) or -/+ 0.05 m lookahead (live, logged)
   mpc mode: D-pad up/down = cornering grip a_lat +/-0.25, right/left = tightness w_len x1.25 / x0.8
@@ -36,6 +38,11 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="mock actuators (wheels never move)")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VAL",
                     help="override a profile value, e.g. control.lookahead_m=0.7")
+    ap.add_argument("--sweep", metavar="MAX:MIN,...",
+                    help="pid mode: automatic speed sweep, e.g. 0.46:0.40,0.50:0.44 "
+                         "(speed_max:speed_min per combination; A = lap)")
+    ap.add_argument("--sweep-laps", type=int, default=5, help="timed laps per combination")
+    ap.add_argument("--sweep-settle", type=int, default=1, help="uncounted laps after each change")
     args = ap.parse_args(argv)
 
     prof = profile.load(args.profile, args.set)
@@ -52,6 +59,17 @@ def main(argv=None) -> int:
     gate = SafetyGate(prof.safety)
     vision = Vision(prof.vision, prof.camera.width, prof.camera.height)
     ctrl = Controller(prof.control)
+    sweep = None
+    if args.sweep:
+        from racer.sweep import Sweep
+        if prof.control.mode != "pid":
+            raise SystemExit("--sweep needs control.mode pid")
+        sweep = Sweep.parse(args.sweep, args.sweep_laps, args.sweep_settle)
+        for k, v in sweep.current.items():
+            setattr(ctrl.cfg, k, v)
+        print(f"SWEEP: {len(sweep.combos)} combinations x ({args.sweep_settle} settle + {args.sweep_laps} timed) laps."
+              f" Press A at the start line every lap; D-pad speed is locked.")
+        print(sweep.status())
     log = None
     if args.log:
         from racer.logger import RunLogger
@@ -76,6 +94,7 @@ def main(argv=None) -> int:
     loop_ms: list = []
     laps: list = []
     last_lap_t = None
+    lap_dirty = False              # car stopped during this lap: it is not a real lap time
     volts = battery.voltage() if battery else None
     last_batt_t = time.monotonic()
     last_print = 0.0
@@ -104,6 +123,8 @@ def main(argv=None) -> int:
                     mode = "auto" if mode == "manual" else "manual"
                     vision.reset()
                     print(f"mode -> {mode}")
+                elif b.startswith("dpad") and sweep is not None and not sweep.done:
+                    print(f"D-pad locked during the sweep ({sweep.status()})")
                 elif b in ("dpad_up", "dpad_down") and ctrl.cfg.mode == "mpc":
                     m = ctrl.cfg.mpc
                     m.a_lat = round(max(1.0, m.a_lat + (0.25 if b == "dpad_up" else -0.25)), 2)
@@ -115,7 +136,11 @@ def main(argv=None) -> int:
                 elif b in ("dpad_up", "dpad_down") and ctrl.cfg.mode == "pid":
                     d = 0.02 if b == "dpad_up" else -0.02
                     c = ctrl.cfg
-                    c.speed_max = round(min(prof.actuators.throttle_max, max(c.speed_min, c.speed_max + d)), 3)
+                    new_v = round(min(prof.actuators.throttle_max, max(c.speed_min, c.speed_max + d)), 3)
+                    if new_v == c.speed_max:
+                        why = (f"cap {prof.actuators.throttle_max}" if d > 0 else f"corner floor {c.speed_min}")
+                        print(f"speed_max AT LIMIT {c.speed_max} ({why}) - press ignored")
+                    c.speed_max = new_v
                     print(f"speed_max={c.speed_max} (min {c.speed_min}, cap {prof.actuators.throttle_max})")
                 elif b in ("dpad_up", "dpad_down"):
                     d = 0.02 if b == "dpad_up" else -0.02
@@ -127,7 +152,12 @@ def main(argv=None) -> int:
                 elif b in ("dpad_left", "dpad_right") and ctrl.cfg.mode == "pid":
                     d = 0.02 if b == "dpad_right" else -0.02
                     c = ctrl.cfg
-                    c.speed_min = round(min(c.speed_max, max(0.30, c.speed_min + d)), 3)
+                    new_v = round(min(c.speed_max, max(0.30, c.speed_min + d)), 3)
+                    if new_v == c.speed_min:
+                        why = (f"cannot exceed speed_max {c.speed_max} - raise it with D-pad up first"
+                               if d > 0 else "minimum 0.30")
+                        print(f"speed_min AT LIMIT {c.speed_min} ({why}) - press ignored")
+                    c.speed_min = new_v
                     print(f"speed_min (turn floor)={c.speed_min}  speed_max={c.speed_max}")
                 elif b in ("dpad_left", "dpad_right"):
                     d = 0.05 if b == "dpad_right" else -0.05
@@ -135,9 +165,36 @@ def main(argv=None) -> int:
                     print(f"lookahead={ctrl.cfg.lookahead_m}")
                 elif b == sc.lap_button:
                     if last_lap_t is not None:
-                        laps.append(now - last_lap_t)
-                        print(f"lap {len(laps)}: {laps[-1]:.3f} s  (best {min(laps):.3f})")
+                        dur = now - last_lap_t
+                        kind = "restart" if lap_dirty else "timed"
+                        settings = {"speed_max": ctrl.cfg.speed_max, "speed_min": ctrl.cfg.speed_min}
+                        if sweep is not None:
+                            if lap_dirty:
+                                sweep.on_restart()
+                            rec = sweep.on_lap(dur)
+                            kind, settings = rec.kind, rec.settings
+                        if kind == "timed" or (sweep is None and kind != "restart"):
+                            laps.append(dur)
+                        tag = "" if kind == "timed" else f"  [{kind}, not counted]"
+                        print(f"lap: {dur:.3f} s{tag}  (best {min(laps):.3f})" if laps else f"lap: {dur:.3f} s{tag}")
+                        if log:
+                            log.event("lap", duration=round(dur, 4), kind=kind,
+                                      combo=None if sweep is None else (sweep.records[-1].combo if sweep.records else None),
+                                      **settings)
+                        if sweep is not None:
+                            if sweep.done:
+                                best = sweep.best()
+                                if best and not getattr(sweep, "_announced", False):
+                                    for k, v in best.items():
+                                        setattr(ctrl.cfg, k, v)
+                                    sweep._announced = True
+                                    print(f"SWEEP DONE - driving on with the fastest combination {best}")
+                            else:
+                                for k, v in sweep.current.items():
+                                    setattr(ctrl.cfg, k, v)
+                                print(sweep.status())
                     last_lap_t = now
+                    lap_dirty = False
                 if log:
                     log.event("button", button=b, mode=mode,
                               straight_throttle=ctrl.cfg.straight_throttle, speed_max=ctrl.cfg.speed_max,
@@ -146,6 +203,8 @@ def main(argv=None) -> int:
 
             ok = gate.allowed(now, pad.held(sc.deadman_button), pad.connected,
                               now - t_frame, mode == "auto")
+            if was_ok and not ok:
+                lap_dirty = True           # stopped mid-lap: this lap's time is not real
             if ok and not was_ok and mode == "auto":
                 # Fresh start (dead-man pressed): forget stale state and
                 # soft-start, so the car settles on the line before speeding up.
@@ -209,6 +268,11 @@ def main(argv=None) -> int:
         c = ctrl.cfg
         print(f"final: mode={c.mode} speed_max={c.speed_max} speed_min={c.speed_min} straight_throttle={c.straight_throttle} "
               f"turn_throttle={c.turn_throttle} lookahead_m={c.lookahead_m}  (copy into the profile to keep)")
+        if sweep is not None and sweep.summary():
+            print("sweep results (timed laps only):")
+            for r in sweep.summary():
+                print(f"  speed_max {r['speed_max']:.2f} speed_min {r['speed_min']:.2f}: "
+                      f"n={r['n']} mean {r['mean']:.3f} best {r['best']:.3f} sd {r['sd']:.3f}")
         if laps:
             print(f"laps: {len(laps)}  best {min(laps):.3f}  "
                   f"mean of last 5 {statistics.mean(laps[-5:]):.3f}")

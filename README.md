@@ -118,6 +118,20 @@ Use `--set key=value` on any script to try a value without editing the profile.
 
 Tuning since run 9 follows the plan: one change per run, keep it only if laps improve without leaving the track.
 
+## Speed sweep
+
+```bash
+python run.py --profile profiles/<file>.yaml --mode auto --log --stream \
+    --sweep 0.46:0.40,0.46:0.44,0.46:0.46,0.50:0.40,0.50:0.44,0.50:0.46,0.55:0.40,0.55:0.44,0.55:0.46
+python tools/laps.py logs/<run>
+```
+
+Each `speed_max:speed_min` combination gets 1 settle lap + 5 timed laps (press A at the
+start line every lap); the D-pad speed buttons are locked. A lap in which the car was
+stopped is not counted. At the end the car keeps driving with the fastest combination
+and run.py prints the per-combination table; `tools/laps.py` prints it for any run
+(older runs are reconstructed from the A presses).
+
 ## Notes
 
 - Dim room: auto exposure picked 33 ms. That blurs badly at speed. `calibrate.py` caps

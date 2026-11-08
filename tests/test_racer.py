@@ -667,3 +667,27 @@ def test_mpc_out_in_out(prof):
     centre, _ = _centre(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)])
     pt = plan_line(centre, c.mpc, 0.3, 0.0)
     assert pt.offsets[len(pt.offsets) // 2] < -0.05              # inside in the turn
+
+
+# --- sweep -------------------------------------------------------------------
+
+def test_sweep_settle_timed_and_advance():
+    from racer.sweep import Sweep
+    sw = Sweep.parse("0.46:0.40,0.50:0.44", laps=2, settle=1)
+    assert sw.current == {"speed_max": 0.46, "speed_min": 0.40}
+    kinds = [sw.on_lap(3.0).kind for _ in range(3)]
+    assert kinds == ["settle", "timed", "timed"]
+    assert sw.current == {"speed_max": 0.50, "speed_min": 0.44}
+    sw.on_restart()
+    assert sw.on_lap(4.5).kind == "restart"          # standing start not counted
+    assert [sw.on_lap(t).kind for t in (3.0, 2.9, 2.8)] == ["settle", "timed", "timed"]
+    assert sw.done and sw.on_lap(2.7).kind == "done"
+    s = sw.summary()
+    assert [r["n"] for r in s] == [2, 2] and s[1]["mean"] == pytest.approx(2.85)
+    assert sw.best() == {"speed_max": 0.50, "speed_min": 0.44}
+
+
+def test_sweep_rejects_floor_above_max():
+    from racer.sweep import Sweep
+    with pytest.raises(ValueError):
+        Sweep.parse("0.46:0.50")
