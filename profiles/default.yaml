@@ -56,17 +56,20 @@ actuators:
   ina219_addr: 66
 control:
   mode: pure_pursuit
-  kp: 1.2
-  ki: 0.3
-  kd: 0.08
-  i_limit: 0.5
+  kff: 1.0
+  kp: 2.0
+  ki: 1.0
+  kd: 0.25
+  i_limit: 0.15
+  i_leak_s: 1.5
   d_filter: 0.6
-  max_error_deg: 60.0
+  near_m: 0.3
+  max_lat_error_m: 0.3
   speed_max: 0.45
   speed_min: 0.36
   speed_turn_drop: 0.06
   speed_steer_drop: 0.04
-  speed_error_drop: 0.05
+  speed_error_drop: 0.2
   wheelbase_m: 0.26
   max_steer_deg: 25.0
   lookahead_m: 0.6
@@ -86,6 +89,7 @@ control:
   lookahead_ref_throttle: 0.36
   sat_threshold: 0.85
   sat_throttle_drop: 0.0
+  sat_speed_floor: 0.33
   lost_hold_s: 0.25
 safety:
   deadman_button: rb

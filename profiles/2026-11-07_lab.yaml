@@ -56,17 +56,20 @@ actuators:
   ina219_addr: 66
 control:
   mode: pid
-  kp: 1.0
-  ki: 0.3
+  kff: 1.0
+  kp: 1.5
+  ki: 0.5
   kd: 0.1
-  i_limit: 0.5
+  i_limit: 0.15
+  i_leak_s: 1.5
   d_filter: 0.6
-  max_error_deg: 60.0
-  speed_max: 0.55
-  speed_min: 0.4
+  near_m: 0.3
+  max_lat_error_m: 0.3
+  speed_max: 0.53
+  speed_min: 0.38
   speed_turn_drop: 0.06
   speed_steer_drop: 0.04
-  speed_error_drop: 0.05
+  speed_error_drop: 0.2
   wheelbase_m: 0.26
   max_steer_deg: 35
   lookahead_m: 0.7
@@ -86,6 +89,7 @@ control:
   lookahead_ref_throttle: 0.36
   sat_threshold: 0.85
   sat_throttle_drop: 0.06
+  sat_speed_floor: 0.33
   lost_hold_s: 0.25
 safety:
   deadman_button: rb

@@ -100,19 +100,23 @@ class ActuatorCfg:
 @dataclass
 class ControlCfg:
     mode: str = "pure_pursuit"       # pure_pursuit | pid
-    # --- pid mode: steering = PID on heading error (rad) to the lookahead point
-    kp: float = 1.2
-    ki: float = 0.3
-    kd: float = 0.08
-    i_limit: float = 0.5             # clamp on the integral (rad*s)
+    # --- pid mode: steering = kff * pure pursuit (feedforward)
+    #                         + PID on lateral error (m) at near_m ahead
+    kff: float = 1.0
+    kp: float = 2.0                  # steer per metre of lateral error
+    ki: float = 1.0                  # steer per metre*second
+    kd: float = 0.25                 # steer per metre/second
+    i_limit: float = 0.15            # clamp on the integral (m*s)
+    i_leak_s: float = 1.5            # integral decays with this time constant
     d_filter: float = 0.6            # EMA on the derivative (0 = raw)
-    max_error_deg: float = 60.0      # heading error is clamped to this before the PID
+    near_m: float = 0.3              # where the lateral error is measured
+    max_lat_error_m: float = 0.3     # clamp before the PID
     # --- pid mode: speed = speed_max - drops, clamped to [speed_min, speed_max]
     speed_max: float = 0.45
     speed_min: float = 0.36          # car does not move below ~0.35
     speed_turn_drop: float = 0.06    # x turn factor (0..1) from the preview point
     speed_steer_drop: float = 0.04   # x |steering|
-    speed_error_drop: float = 0.05   # x |heading error| (rad)
+    speed_error_drop: float = 0.2    # x |lateral error| (m)
     # --- shared
     wheelbase_m: float = 0.26
     max_steer_deg: float = 25.0
@@ -133,6 +137,7 @@ class ControlCfg:
     lookahead_ref_throttle: float = 0.36
     sat_threshold: float = 0.85      # |steering| above this counts as near full lock
     sat_throttle_drop: float = 0.0   # throttle removed at full lock (linear from threshold)
+    sat_speed_floor: float = 0.33    # pid mode: limiter may go this low (below speed_min) when running wide
     lost_hold_s: float = 0.25        # hold last steering this long when track is lost
 
 
