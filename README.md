@@ -69,6 +69,8 @@ cd ~/piracer-oval && source ~/env/bin/activate
 | X | toggle manual ↔ auto |
 | B | e-stop (latched); START clears it |
 | A | lap mark (press at the start line). `run.py` prints lap times |
+| D-pad up/down | pid mode: `speed_max` ±0.02 (pure pursuit: straight+turn throttle) |
+| D-pad left/right | pid mode: `speed_min` (turn floor) ±0.02 (pure pursuit: lookahead ±0.05) |
 
 The motor also stops if no new camera frame arrives within `safety.frame_timeout_s` (100 ms),
 if the gamepad disconnects, or after `safety.max_run_s` in auto (0 = off).
@@ -103,6 +105,13 @@ raise `lookahead_m` only if the car oscillates. Raise `actuators.throttle_max` (
 default 0.35) once the car is stable.
 
 Use `--set key=value` on any script to try a value without editing the profile.
+
+## Progress (lab oval, 2026-11-07)
+
+| Run | Controller | Laps | Best | Mean | Longest stretch |
+|---|---|---|---|---|---|
+| 3 | pure pursuit, fitted geometry | 19 | 3.88 s | 4.12 s | 94 s |
+| 6 | PID + speed output, lookahead fix | 23 | 3.29 s | 3.54 s | 151 s |
 
 ## Notes
 

@@ -10,7 +10,7 @@ Gamepad (F710, X/XInput mode):
   X  toggle manual/auto    B  e-stop (latched)    START  clear e-stop
   A  mark a lap (press as the car crosses the start line)
   D-pad up/down     +/- 0.02 on speed_max (pid mode) or straight+turn throttle (live, logged)
-  D-pad left/right  -/+ 0.05 m lookahead (live, logged)
+  D-pad left/right  -/+ 0.02 speed_min / turn floor (pid mode) or -/+ 0.05 m lookahead (live, logged)
 """
 from __future__ import annotations
 
@@ -112,6 +112,11 @@ def main(argv=None) -> int:
                     ctrl.cfg.turn_throttle = round(min(cap, max(0.0, ctrl.cfg.turn_throttle + d)), 3)
                     print(f"throttle straight={ctrl.cfg.straight_throttle} turn={ctrl.cfg.turn_throttle}"
                           f" (cap {prof.actuators.throttle_max})")
+                elif b in ("dpad_left", "dpad_right") and ctrl.cfg.mode == "pid":
+                    d = 0.02 if b == "dpad_right" else -0.02
+                    c = ctrl.cfg
+                    c.speed_min = round(min(c.speed_max, max(0.30, c.speed_min + d)), 3)
+                    print(f"speed_min (turn floor)={c.speed_min}  speed_max={c.speed_max}")
                 elif b in ("dpad_left", "dpad_right"):
                     d = 0.05 if b == "dpad_right" else -0.05
                     ctrl.cfg.lookahead_m = round(max(0.2, ctrl.cfg.lookahead_m + d), 3)
@@ -124,6 +129,7 @@ def main(argv=None) -> int:
                 if log:
                     log.event("button", button=b, mode=mode,
                               straight_throttle=ctrl.cfg.straight_throttle, speed_max=ctrl.cfg.speed_max,
+                              speed_min=ctrl.cfg.speed_min,
                               turn_throttle=ctrl.cfg.turn_throttle, lookahead_m=ctrl.cfg.lookahead_m)
 
             est = vision.process(img, keep_mask=stream is not None)
@@ -178,7 +184,7 @@ def main(argv=None) -> int:
         if loop_ms:
             print(f"loop ms: mean {statistics.mean(loop_ms):.1f}  max {max(loop_ms):.1f}")
         c = ctrl.cfg
-        print(f"final: mode={c.mode} speed_max={c.speed_max} straight_throttle={c.straight_throttle} "
+        print(f"final: mode={c.mode} speed_max={c.speed_max} speed_min={c.speed_min} straight_throttle={c.straight_throttle} "
               f"turn_throttle={c.turn_throttle} lookahead_m={c.lookahead_m}  (copy into the profile to keep)")
         if laps:
             print(f"laps: {len(laps)}  best {min(laps):.3f}  "

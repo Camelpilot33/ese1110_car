@@ -50,7 +50,7 @@ actuators:
   throttle_forward_us: 2035
   throttle_stop_us: 1506
   throttle_reverse_us: 1302
-  throttle_max: 0.5
+  throttle_max: 0.6
   reverse_max: 0.5
   ina219_addr: 66
 control:
@@ -61,8 +61,8 @@ control:
   i_limit: 0.5
   d_filter: 0.6
   max_error_deg: 60.0
-  speed_max: 0.45
-  speed_min: 0.36
+  speed_max: 0.52
+  speed_min: 0.38
   speed_turn_drop: 0.06
   speed_steer_drop: 0.04
   speed_error_drop: 0.05
