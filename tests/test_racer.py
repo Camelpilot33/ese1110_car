@@ -691,3 +691,26 @@ def test_sweep_rejects_floor_above_max():
     from racer.sweep import Sweep
     with pytest.raises(ValueError):
         Sweep.parse("0.46:0.50")
+
+
+def test_logger_lap_event_with_kind_field(tmp_path, prof):
+    """Run 17 crashed on the first lap: log.event("lap", kind=...) clashed with
+    the method's own parameter name."""
+    import json as _json
+    from racer.logger import RunLogger
+    log = RunLogger(tmp_path, "t", prof)
+    log.event("lap", duration=3.1, kind="timed", combo=0, speed_max=0.46, speed_min=0.40)
+    log.close()
+    rec = _json.loads((log.dir / "events.jsonl").read_text())
+    assert rec["event"] == "lap" and rec["kind"] == "timed" and rec["combo"] == 0
+
+
+def test_run_lap_logging_call_matches_logger():
+    """The exact keyword set run.py passes for a lap event must be accepted."""
+    import inspect, re
+    from racer.logger import RunLogger
+    src = open("run.py").read()
+    call = re.search(r'log\.event\("lap",(.*?)\)\n', src, re.S).group(1)
+    keys = set(re.findall(r'(\w+)=', call))
+    params = inspect.signature(RunLogger.event).parameters
+    assert not (keys & {n for n, p in params.items() if p.kind != p.POSITIONAL_ONLY and n != "data"})

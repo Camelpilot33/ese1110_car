@@ -44,9 +44,10 @@ class RunLogger:
         except queue.Full:
             self.dropped += 1
 
-    def event(self, kind: str, **data) -> None:
-        """Queued like state rows: the control loop never touches the SD card."""
-        rec = {"t": time.monotonic(), "event": kind, **data}
+    def event(self, name: str, /, **data) -> None:
+        """Queued like state rows: the control loop never touches the SD card.
+        `name` is positional-only so any field name (e.g. kind=) can be logged."""
+        rec = {"t": time.monotonic(), "event": name, **data}
         try:
             self._q.put_nowait(("event", rec))
         except queue.Full:
