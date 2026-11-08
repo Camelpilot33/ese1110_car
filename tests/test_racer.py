@@ -11,7 +11,7 @@ from racer.control import Controller, lookahead_point, pure_pursuit
 from racer.geometry import GroundMapper, fit_homography
 from racer.profile import ActuatorCfg, SafetyCfg
 from racer.safety import SafetyGate
-from racer.vision import Vision, row_runs
+from racer.vision import Vision, mask_runs, row_runs
 
 W, H = 320, 240
 ORANGE = (30, 110, 230)   # BGR
@@ -360,3 +360,11 @@ def test_speed_blend_between_straight_and_turn(prof):
     # leaving the turn: throttle recovers within a few frames
     th = [ctrl.update(est_s, 0.2 + i * 0.03).throttle for i in range(6)]
     assert th[0] > turn and th[-1] > 0.49
+
+
+def test_mask_runs_matches_row_runs():
+    rng = np.random.default_rng(0)
+    m = (rng.random((20, 50)) > 0.6).astype(np.uint8) * 255
+    r, u = mask_runs(m, 2)
+    for i in range(20):
+        assert list(u[r == i]) == row_runs(m[i], 2)

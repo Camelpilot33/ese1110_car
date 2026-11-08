@@ -86,6 +86,18 @@ def row_runs(row: np.ndarray, min_len: int) -> List[float]:
     return list(((starts + ends) / 2.0)[keep])
 
 
+def mask_runs(sub: np.ndarray, min_len: int):
+    """Runs of nonzero pixels in each row of a 2-D mask, vectorised.
+
+    Returns (row index, run centre x) arrays, ordered by row then x."""
+    b = (sub > 0).astype(np.int8)
+    d = np.diff(np.pad(b, ((0, 0), (1, 1))), axis=1)
+    sr, sc = np.nonzero(d == 1)      # run starts (row-major order)
+    _, ec = np.nonzero(d == -1)      # run ends (exclusive), same order
+    keep = (ec - sc) >= min_len
+    return sr[keep], (sc[keep] + ec[keep] - 1) / 2.0
+
+
 class Vision:
     def __init__(self, cfg: VisionCfg, width: int, height: int):
         self.cfg = cfg
@@ -115,32 +127,31 @@ class Vision:
         h = mask.shape[0]
         top, bot = int(cfg.roi_top * h), int(cfg.roi_bottom * h)
 
-        # Collect runs per row (near rows first) and project them in one batch.
-        rows, uv = [], []
-        for v in range(bot - 1, top - 1, -cfg.row_step):
-            for u in row_runs(mask[v], cfg.min_cluster_px):
-                rows.append(v)
-                uv.append((u, v))
+        # Tape runs on every row_step-th row, found for all rows at once.
+        vs = np.arange(bot - 1, top - 1, -cfg.row_step)          # near -> far
+        rows, us = mask_runs(mask[vs], cfg.min_cluster_px)
         est = TrackEstimate(mask=mask if keep_mask else None)
-        if not uv:
+        if len(us) == 0:
             return est
-        g = self.mapper.pixels_to_ground(np.array(uv))
-        rows = np.array(rows)
+        g = self.mapper.pixels_to_ground(np.c_[us, vs[rows]])
+        ok = np.isfinite(g).all(axis=1) & (g[:, 1] > 0) & (g[:, 1] < cfg.max_range_m)
+        rows, g = rows[ok], g[ok]
+        if len(rows) == 0:
+            return est
+        # rows is sorted (near first); split into per-row groups.
+        cuts = np.flatnonzero(np.diff(rows)) + 1
+        starts = np.r_[0, cuts]
+        ends = np.r_[cuts, len(rows)]
 
         w = cfg.track_width_m
         tol = cfg.assoc_tolerance * w
         center = self._prev_center
         left, right, centers = [], [], []
-        for v in np.unique(rows)[::-1]:          # bottom (near) -> top (far)
-            pts = g[rows == v]
-            pts = pts[np.isfinite(pts).all(axis=1)]
-            pts = pts[(pts[:, 1] > 0) & (pts[:, 1] < cfg.max_range_m)]
-            if len(pts) == 0:
-                continue
-            y = float(np.median(pts[:, 1]))
+        for a, b in zip(starts.tolist(), ends.tolist()):
+            xs = g[a:b, 0]
+            y = float(g[a:b, 1].mean())
             if centers and y - centers[-1][1] > cfg.max_gap_m:
                 break       # long gap: anything beyond is probably not our track
-            xs = pts[:, 0]
             if cfg.mode == "center_line":
                 i = int(np.argmin(np.abs(xs - center)))
                 if abs(xs[i] - center) < tol:
