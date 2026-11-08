@@ -1,7 +1,7 @@
 """Frames + state to logs/<timestamp>_<mode>/ on a background thread.
 
 Layout:
-  frames/000123.png   raw camera frame, lossless (exactly what vision saw)
+  frames/000123.jpg   camera frame, JPEG q95 4:4:4 (no chroma subsampling)
   state.jsonl         one JSON object per loop iteration
   profile.yaml        profile used for the run
   events.jsonl        laps, mode changes, e-stops
@@ -63,10 +63,12 @@ class RunLogger:
                 continue
             state, frame = item
             if frame is not None:
-                # PNG: lossless, so replays reproduce live vision exactly
-                # (JPEG colour loss on thin far tape changed results in run 10)
-                cv2.imwrite(str(self.dir / "frames" / f"{state['frame']:06d}.png"), frame,
-                            [cv2.IMWRITE_PNG_COMPRESSION, 1])
+                # JPEG q95 without chroma subsampling: keeps the colour detail of
+                # thin far tape (4:2:0 JPEG changed results in run 10) at ~1/5 of
+                # the PNG size (PNG logging was ~500 MB per 2 minutes).
+                cv2.imwrite(str(self.dir / "frames" / f"{state['frame']:06d}.jpg"), frame,
+                            [cv2.IMWRITE_JPEG_QUALITY, 95,
+                             cv2.IMWRITE_JPEG_SAMPLING_FACTOR, cv2.IMWRITE_JPEG_SAMPLING_FACTOR_444])
             self._state.write(json.dumps(state, default=_jsonable) + "\n")
 
     def close(self) -> None:

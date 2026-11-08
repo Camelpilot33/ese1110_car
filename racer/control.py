@@ -134,6 +134,7 @@ class Controller:
         self.mpc = None
         if cfg.mode == "mpc":
             from .mpc import MpcController
+            cfg.mpc.track_direction = cfg.track_direction
             self.mpc = MpcController(cfg.mpc, cfg.wheelbase_m, cfg.max_steer_deg,
                                      cfg.steer_min, cfg.steer_max, cfg.mpc.half_width_m)
 

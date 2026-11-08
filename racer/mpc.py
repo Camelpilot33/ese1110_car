@@ -98,7 +98,8 @@ class LineTracker:
         cfg = self.cfg
         if dt <= 0:
             return
-        v_ss = max(0.0, cfg.speed_gain * (throttle - cfg.speed_offset))
+        # below the ESC/friction threshold the car does not drive: it coasts to a stop
+        v_ss = max(0.0, cfg.speed_gain * (throttle - cfg.speed_offset)) if throttle >= cfg.thr_moving else 0.0
         self.v += (v_ss - self.v) * min(1.0, dt / cfg.speed_tau_s)
         if self.line is not None:
             self.line = ego_transform(self.line, self.v * dt, kappa_car)
@@ -203,6 +204,13 @@ def plan_line(centre: np.ndarray, cfg: MpcCfg, half_width: float, kappa_prev: fl
     b = np.r_[np.array(rhs), np.zeros(n)]
     kc = discrete_curvature(C)
     kc = np.where(np.abs(kc) < cfg.kc_deadband, 0.0, kc)      # fit noise on straights is not a bend
+    # One-way track: the inside is always the same side. Without this, noise in
+    # the sign of kc made the length term snap the whole plan from one lane edge
+    # to the other between frames (run 13).
+    if cfg.track_direction == "left":
+        kc = -np.abs(kc)
+    elif cfg.track_direction == "right":
+        kc = np.abs(kc)
     g = cfg.w_len * (-kc) * ds
 
     H = 2 * A.T @ A

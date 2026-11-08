@@ -332,7 +332,7 @@ def test_logger_writes_state_events_frames(tmp_path, prof):
     log.event("button", button="a")
     log.log({"t": 1.0, "frame": 7, "x": np.float32(0.5)}, np.zeros((8, 8, 3), np.uint8))
     log.close()
-    assert (log.dir / "frames" / "000007.png").exists()
+    assert (log.dir / "frames" / "000007.jpg").exists()
     assert _json.loads((log.dir / "state.jsonl").read_text())["x"] == 0.5
     assert _json.loads((log.dir / "events.jsonl").read_text())["button"] == "a"
 
@@ -629,3 +629,27 @@ def test_mpc_is_fast(prof):
     for i in range(100):
         ctrl.update(est, i / 60)
     assert (time.perf_counter() - t) / 100 < 0.012      # Pi 4 measured ~4.5 ms; margin for load
+
+
+def test_mpc_left_track_length_term_never_pulls_right(prof):
+    """Run 13: with a large w_len the plan snapped between lane edges because the
+    sign of a tiny curvature decided the side. On a left-only track it must stay left."""
+    from racer.mpc import plan_line
+    c = _mpc_cfg(prof)
+    c.mpc.w_len, c.mpc.track_direction, c.mpc.kc_deadband = 20000.0, "left", 0.0
+    ys = np.linspace(0.3, 0.9, 15)
+    wiggle = np.c_[0.002 * np.sin(ys * 40), ys]                 # near-straight, noisy sign
+    plan = plan_line(wiggle, c.mpc, 0.3, 0.0)
+    assert np.all(plan.offsets <= 1e-6)
+
+
+def test_speed_model_deadband():
+    from racer.mpc import LineTracker
+    from racer.profile import MpcCfg
+    lt = LineTracker(MpcCfg())
+    for _ in range(120):
+        lt.predict(1 / 60, 0.0, 0.45)
+    assert lt.v > 1.0
+    for _ in range(120):
+        lt.predict(1 / 60, 0.0, 0.33)                           # below the moving threshold
+    assert lt.v < 0.1

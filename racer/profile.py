@@ -108,15 +108,16 @@ class MpcCfg:
     horizon_n: int = 10              # plan points over the visible track
     margin_m: float = 0.05           # keep the car centre this far inside each tape line
     half_width_m: float = 0.20       # set from vision.track_width_m / 2 by run.py
+    track_direction: str = "both"    # set from control.track_direction: the inside of every turn
     w_first: float = 1.0             # weight of the first curvature term
     w_rate: float = 1.0              # penalty on changing the start curvature (steering rate)
     w_centre: float = 0.05           # weak pull toward the lane centre
-    w_len: float = 400.0             # path-length weight: higher = tighter (inside) line in turns
+    w_len: float = 2000.0            # path-length weight: higher = tighter (inside) line in turns (run 13 driver chose max)
     kc_deadband: float = 0.3         # centre-line curvature below this (1/m) counts as straight
     track_lookahead_m: float = 0.45  # steer by pure pursuit to the planned line this far ahead
     track_lookahead_per_v: float = 0.05  # + this much per unit of speed
     # speed planning
-    a_lat: float = 3.4               # lateral grip: v <= sqrt(a_lat / kappa); 3.4 matches run 11's turn speed
+    a_lat: float = 5.0               # lateral grip: v <= sqrt(a_lat / kappa); run 13 driver settled at 5.15
     a_brake: float = 3.0
     a_accel: float = 2.0
     v_max: float = 2.6
@@ -130,7 +131,8 @@ class MpcCfg:
     speed_tau_s: float = 0.3
     thr_min: float = 0.38            # moving floor
     thr_max: float = 0.55
-    thr_brake: float = 0.33          # coasting throttle when slowing down
+    thr_brake: float = 0.36          # throttle while slowing down: just above thr_moving so the car never stalls
+    thr_moving: float = 0.35         # below this the car does not move (run 1)
     # steering model
     understeer_k: float = 0.15       # kappa_actual = kappa_cmd / (1 + k v^2); the estimator's bias learns the rest
     latency_s: float = 0.06          # camera + loop + servo

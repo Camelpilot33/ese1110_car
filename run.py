@@ -110,7 +110,7 @@ def main(argv=None) -> int:
                     print(f"mpc a_lat (cornering grip)={m.a_lat}")
                 elif b in ("dpad_left", "dpad_right") and ctrl.cfg.mode == "mpc":
                     m = ctrl.cfg.mpc
-                    m.w_len = round(max(0.0, m.w_len * (1.25 if b == "dpad_right" else 0.8)), 1)
+                    m.w_len = round(min(5000.0, max(50.0, m.w_len * (1.25 if b == "dpad_right" else 0.8))), 1)
                     print(f"mpc w_len (tightness)={m.w_len}  (right = tighter line in turns)")
                 elif b in ("dpad_up", "dpad_down") and ctrl.cfg.mode == "pid":
                     d = 0.02 if b == "dpad_up" else -0.02

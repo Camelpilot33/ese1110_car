@@ -62,14 +62,15 @@ control:
     horizon_n: 10
     margin_m: 0.05
     half_width_m: 0.2
+    track_direction: both
     w_first: 1.0
     w_rate: 1.0
     w_centre: 0.05
-    w_len: 400.0
+    w_len: 2000.0
     kc_deadband: 0.3
     track_lookahead_m: 0.45
     track_lookahead_per_v: 0.05
-    a_lat: 3.4
+    a_lat: 5.0
     a_brake: 3.0
     a_accel: 2.0
     v_max: 2.6
@@ -82,7 +83,8 @@ control:
     speed_tau_s: 0.3
     thr_min: 0.38
     thr_max: 0.55
-    thr_brake: 0.33
+    thr_brake: 0.36
+    thr_moving: 0.35
     understeer_k: 0.15
     latency_s: 0.06
     steer_delay_s: 0.1
