@@ -445,23 +445,3 @@ def test_lone_inner_line_recognised_from_history(prof):
     v2 = Vision(prof.vision, W, H)
     est2 = v2.process(render(prof, [straight(-0.10)]))
     assert len(est2.right_pts) > 3 and est2.x_at(0.6) < 0
-
-
-def test_sim_smoke():
-    """Closed-loop simulator runs the real controller around the oval without leaving it."""
-    import sys as _sys
-    _sys.path.insert(0, "tools")
-    import sim
-    r = sim.simulate(profile.load("profiles/2026-11-07_lab.yaml"), seconds=8.0)
-    assert not r["crashed"] and r["off"] < 0.05 and len(r["laps"]) >= 1
-
-
-def test_pid_lateral_error_zero_on_curved_line(prof):
-    """On a curved line with the car on it, feedforward steers the curve and the
-    PID error (lateral offset at the car) is ~0 - it must not integrate the turn."""
-    c = prof.control
-    c.mode, c.racing_line_offset_m = "pid", 0.0
-    img = render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)])       # car centred in a left turn
-    est = Vision(prof.vision, W, H).process(img)
-    cmd = Controller(c).update(est, 0.0)
-    assert abs(cmd.error) < 0.05 and cmd.steering < -0.2

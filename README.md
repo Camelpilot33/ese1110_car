@@ -27,7 +27,6 @@ right 330→1343, throttle stop 370→1506, forward 500→2035, reverse 320→13
 ```
 racer/        camera, vision, control, actuators, safety, logger, geometry, profile
 tools/        calibrate.py  replay.py  stream.py  ground_cal.py  lens_cal.py  actuator_cal.py
-              geometry_fit.py (camera pitch from parallel tape lines)  sim.py (closed-loop oval simulator)
 profiles/     default.yaml + one <date>_<venue>.yaml per session
 run.py        main loop
 logs/         gitignored
@@ -113,22 +112,6 @@ Use `--set key=value` on any script to try a value without editing the profile.
 |---|---|---|---|---|---|
 | 3 | pure pursuit, fitted geometry | 19 | 3.88 s | 4.12 s | 94 s |
 | 6 | PID + speed output, lookahead fix | 23 | 3.29 s | 3.54 s | 151 s |
-
-## Controller (control.mode: pid)
-
-- steering = `kff` x pure pursuit to the lookahead point (feedforward: the steering
-  the curve needs) + PID on the lateral error at `near_m` ahead (zero when the car is
-  on its line, straight or curved). I leaks (`i_leak_s`) so it does not carry bias
-  into the straights.
-- Pure pursuit alone cannot ask for more curvature than ~1/(visible distance): with
-  the path visible to ~0.55 m in the turns that caps steering near 0.7, which is why
-  the car drifted outside with pure pursuit and why the inside offset barely helped.
-- speed = `speed_max` - drops for an upcoming turn, steering effort and lateral
-  error, clamped to [`speed_min`, `speed_max`]; near full lock it may fall to
-  `sat_speed_floor` so a car running wide can shed speed.
-- `tools/sim.py` runs this controller in a kinematic oval model fitted to runs 3-4
-  (understeer, grip, delay). Use it to compare settings, not to predict lap times:
-  `python tools/sim.py --profile profiles/x.yaml --grid control.kp=1,1.5,2 control.kd=0.1,0.25`
 
 ## Notes
 

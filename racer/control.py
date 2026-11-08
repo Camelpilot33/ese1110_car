@@ -30,7 +30,7 @@ class Command:
     phase: str = STRAIGHT
     lost: bool = False
     turn_factor: float = 0.0
-    error: float = 0.0           # pid: lateral error (m); pure pursuit: angle to target (rad); + = right
+    error: float = 0.0           # heading error to target (rad, + = right)
 
 
 def path_x(est: TrackEstimate, y: float) -> float:
@@ -189,20 +189,12 @@ class Controller:
         return throttle
 
     def _pid_step(self, est: TrackEstimate, kappa: float, f: float, dt: float, now: float) -> Command:
-        """steering = feedforward (pure pursuit to the lookahead point: the
-        steering the curve needs, ~0 on straights)
-                    + PID on the lateral error at the car (m, + = line is to
-        the right), which is zero whenever the car is on its line, straight
-        or curved. I removes steady drift (understeer) and leaks away."""
         cfg = self.cfg
         tx, ty = self._target(est, cfg.lookahead_m, kappa, f)
-        ff = cfg.kff * pure_pursuit(tx, ty, cfg.wheelbase_m, math.radians(cfg.max_steer_deg))
-        off = math.copysign(cfg.racing_line_offset_m * f, kappa) if cfg.racing_line_offset_m else 0.0
-        e = path_x(est, max(est.y_min, cfg.near_m)) + off
-        e = float(np.clip(e, -cfg.max_lat_error_m, cfg.max_lat_error_m))   # one bad frame cannot kick D
-        if dt > 0 and cfg.i_leak_s > 0:
-            self.pid.integral *= math.exp(-dt / cfg.i_leak_s)
-        steer = float(np.clip(ff + self.pid.update(e, dt), -1.0, 1.0))
+        e = math.atan2(tx, ty)                       # heading error to target, + = right
+        lim = math.radians(cfg.max_error_deg)
+        e = float(np.clip(e, -lim, lim))             # one bad frame cannot kick D
+        steer = float(np.clip(self.pid.update(e, dt), -1.0, 1.0))
         a = cfg.steer_smoothing
         self._steer = a * self._steer + (1 - a) * steer
 
@@ -213,13 +205,9 @@ class Controller:
                  - cfg.speed_turn_drop * f
                  - cfg.speed_steer_drop * abs(self._steer)
                  - cfg.speed_error_drop * abs(e))
+        speed = self._limit_saturation(speed)
+        # Never below speed_min: the car stalls under ~0.35 and would stop mid-turn.
         speed = float(np.clip(speed, cfg.speed_min, cfg.speed_max))
-        # Near full lock the limiter may go below speed_min (down to
-        # sat_speed_floor): a rolling car keeps moving there, it just cannot
-        # start from rest, and it must be able to shed speed when running wide.
-        limited = self._limit_saturation(speed)
-        if limited < speed:
-            speed = max(limited, min(speed, cfg.sat_speed_floor))
         if now < self._brake_until:
             speed = cfg.brake_throttle
         return Command(self._steer, speed, (tx, ty), kappa, self.phase, turn_factor=f, error=e)
