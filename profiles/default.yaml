@@ -23,6 +23,7 @@ vision:
   max_gap_m: 0.3
   outlier_m: 0.06
   track_width_m: 0.6
+  track_direction: both
   assoc_tolerance: 0.35
   min_points: 4
   lens:

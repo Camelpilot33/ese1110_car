@@ -172,6 +172,20 @@ class Vision:
                 (lx if lx is not None else rx) + (w / 2 if lx is not None else -w / 2))
             centers.append(cpt)
 
+        # One-way track: a lone line is the OUTER one (for a left-only track the
+        # outer line sweeps across the view in every turn; the inner line
+        # leaves the field of view to the left).
+        if cfg.mode == "two_lines" and cfg.track_direction in ("left", "right"):
+            # "Lone" = the other side has only a few stray points.
+            def lone(a, b):
+                return len(a) >= cfg.min_points and len(b) < max(3, 0.15 * len(a))
+            if cfg.track_direction == "left" and lone(left, right):
+                right, left = left, []
+                centers = self._centers_from_line(right, -w / 2)
+            elif cfg.track_direction == "right" and lone(right, left):
+                left, right = right, []
+                centers = self._centers_from_line(left, +w / 2)
+
         est.left_pts = np.array(left).reshape(-1, 2)
         est.right_pts = np.array(right).reshape(-1, 2)
         est.center_pts = np.array(centers).reshape(-1, 2)
@@ -196,6 +210,10 @@ class Vision:
 
     def reset(self) -> None:
         self._prev_center = 0.0
+
+    @classmethod
+    def _centers_from_line(cls, line: list, dist: float) -> list:
+        return [cls._offset(line[:i + 1], dist) for i in range(len(line))]
 
     @staticmethod
     def _offset(line: list, dist: float) -> tuple:

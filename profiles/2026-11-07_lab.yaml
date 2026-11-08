@@ -23,6 +23,7 @@ vision:
   max_gap_m: 0.3
   outlier_m: 0.06
   track_width_m: 0.4
+  track_direction: left
   assoc_tolerance: 0.45
   min_points: 4
   lens:
@@ -54,7 +55,7 @@ actuators:
   ina219_addr: 66
 control:
   wheelbase_m: 0.26
-  max_steer_deg: 18
+  max_steer_deg: 25
   lookahead_m: 0.8
   steer_smoothing: 0.0
   straight_throttle: 0.36

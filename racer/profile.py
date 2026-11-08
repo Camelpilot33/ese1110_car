@@ -66,6 +66,8 @@ class VisionCfg:
     max_gap_m: float = 0.30          # stop scanning after a forward gap this long
     outlier_m: float = 0.06          # centre points this far off the first fit are dropped
     track_width_m: float = 0.60      # distance between the two tape lines
+    track_direction: str = "both"    # left | right | both: turn direction of a one-way track;
+                                     # with left/right a lone visible line is taken as the outer line
     assoc_tolerance: float = 0.35    # fraction of track width
     min_points: int = 4              # centre points needed for a valid estimate
     lens: LensCfg = field(default_factory=LensCfg)

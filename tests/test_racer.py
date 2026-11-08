@@ -286,3 +286,23 @@ def test_draw_debug_handles_offscreen_points(prof):
                         left_pts=np.array([[1e6, 1e6]]))
     out = draw_debug(np.zeros((H, W, 3), np.uint8), v, est, target=(1e5, 1e5))
     assert out.shape == (H, W, 3)
+
+
+def test_left_only_track_lone_line_is_outer(prof):
+    # Car has drifted out: only one line visible, 0.1 m to its LEFT. On a
+    # left-only track that is the outer line, so the target must be further left.
+    img = render(prof, [straight(-0.1)])
+    est = Vision(prof.vision, W, H).process(img)
+    assert len(est.left_pts) > 3 and est.x_at(0.6) > 0            # default: taken as left line
+    prof.vision.track_direction = "left"
+    est = Vision(prof.vision, W, H).process(img)
+    assert len(est.right_pts) > 3 and len(est.left_pts) == 0
+    assert est.x_at(0.6) == pytest.approx(-0.1 - prof.vision.track_width_m / 2, abs=0.04)
+    assert Controller(prof.control).update(est, 0.0).steering < -0.3
+
+
+def test_left_only_track_keeps_two_lines(prof):
+    prof.vision.track_direction = "left"
+    est = Vision(prof.vision, W, H).process(render(prof, [straight(-0.3), straight(0.3)]))
+    assert len(est.left_pts) > 3 and len(est.right_pts) > 3
+    assert abs(est.x_at(0.6)) < 0.03
