@@ -112,6 +112,11 @@ Use `--set key=value` on any script to try a value without editing the profile.
 |---|---|---|---|---|---|
 | 3 | pure pursuit, fitted geometry | 19 | 3.88 s | 4.12 s | 94 s |
 | 6 | PID + speed output, lookahead fix | 23 | 3.29 s | 3.54 s | 151 s |
+| 7 | + inside offset 0.20, speed_max 0.55, floor 0.40 | 2 | 3.04 s | 3.05 s | 18 s (ran 43 cm wide, 26 stops) |
+| 8 | lateral-error PID + sim-tuned (reverted) | – | – | – | over-steered, full lock 46 % |
+| 9 | run 7 with ki = 0 (kept) | 14 | 3.19 s | 3.29 s | wobble -29 %, 11 cm wide, full lock 8 % |
+
+Tuning since run 9 follows the plan: one change per run, keep it only if laps improve without leaving the track.
 
 ## Notes
 
