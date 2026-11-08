@@ -45,9 +45,16 @@ def pure_pursuit(x: float, y: float, wheelbase: float, max_steer_rad: float) -> 
     return float(np.clip(delta / max_steer_rad, -1.0, 1.0))
 
 
-def preview_curvature(est: TrackEstimate, y_from: float, y_to: float) -> float:
-    """Curvature of the visible track between y_from and y_to (circle fit)."""
-    return est.circle_curvature(y_from, y_to)
+def preview_curvature(est: TrackEstimate, preview_m: float) -> float:
+    """Curvature (1/m, + = right) of the arc from the car to the path point
+    `preview_m` ahead, i.e. pure pursuit at the preview distance.
+
+    Depends only on that point's position (not on a second derivative of the
+    fit), so it is far less noisy than the fitted path's curvature: on the lab
+    oval it separates straights (|k| < 0.12) from turns (|k| > 0.56)."""
+    x, y = lookahead_point(est, preview_m)
+    d2 = x * x + y * y
+    return 2.0 * x / d2 if d2 > 1e-6 else 0.0
 
 
 class Controller:
@@ -68,7 +75,7 @@ class Controller:
                            phase=self.phase, lost=lost)
         self._last_valid_t = now
 
-        kappa = preview_curvature(est, 0.5 * cfg.lookahead_m, cfg.brake_preview_m)
+        kappa = preview_curvature(est, cfg.brake_preview_m)
         self._update_phase(kappa, now)
 
         tx, ty = lookahead_point(est, cfg.lookahead_m)

@@ -34,8 +34,8 @@ vision:
     k1: -0.3
     k2: 0.08
   geometry:
-    height_m: 0.12
-    pitch_deg: 12.0
+    height_m: 0.1721
+    pitch_deg: 25.0
     x_offset_m: 0.2
   ground_homography: null
 actuators:
@@ -55,13 +55,13 @@ actuators:
   ina219_addr: 66
 control:
   wheelbase_m: 0.26
-  max_steer_deg: 25
-  lookahead_m: 0.8
+  max_steer_deg: 35
+  lookahead_m: 0.7
   steer_smoothing: 0.0
-  straight_throttle: 0.36
+  straight_throttle: 0.4
   turn_throttle: 0.36
-  brake_preview_m: 1.2
-  turn_kappa_enter: 1.0
+  brake_preview_m: 0.7
+  turn_kappa_enter: 0.85
   turn_kappa_exit: 0.6
   turn_exit_frames: 3
   brake_throttle: 0.0

@@ -104,9 +104,9 @@ class ControlCfg:
     steer_smoothing: float = 0.0     # EMA factor 0..1 (0 = none)
     straight_throttle: float = 0.25
     turn_throttle: float = 0.20
-    brake_preview_m: float = 1.2     # look this far ahead for an upcoming turn
-    turn_kappa_enter: float = 1.0    # 1/m; curvature that counts as a turn
-    turn_kappa_exit: float = 0.6
+    brake_preview_m: float = 1.2     # look this far ahead for an upcoming turn (braking point)
+    turn_kappa_enter: float = 0.4    # 1/m; arc curvature to the preview point that counts as a turn
+    turn_kappa_exit: float = 0.25
     turn_exit_frames: int = 3
     brake_throttle: float = 0.0      # negative = brake pulse on turn entry
     brake_time_s: float = 0.0

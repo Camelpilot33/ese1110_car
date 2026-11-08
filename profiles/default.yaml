@@ -61,8 +61,8 @@ control:
   straight_throttle: 0.25
   turn_throttle: 0.2
   brake_preview_m: 1.2
-  turn_kappa_enter: 1.0
-  turn_kappa_exit: 0.6
+  turn_kappa_enter: 0.4
+  turn_kappa_exit: 0.25
   turn_exit_frames: 3
   brake_throttle: 0.0
   brake_time_s: 0.0

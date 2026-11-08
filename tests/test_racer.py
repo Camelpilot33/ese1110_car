@@ -130,7 +130,6 @@ def test_left_turn_detected(prof):
     assert est.valid
     assert est.circle_curvature() < -0.4
     c = Controller(prof.control)
-    c.cfg.turn_kappa_enter = 0.4
     cmd = c.update(est, 0.0)
     assert cmd.steering < 0 and cmd.phase == "turn"
     assert cmd.throttle == prof.control.turn_throttle
@@ -198,7 +197,7 @@ def test_lost_track_holds_then_stops(prof):
 
 def test_brake_pulse_on_turn_entry(prof):
     cfg = prof.control
-    cfg.brake_throttle, cfg.brake_time_s, cfg.turn_kappa_enter = -0.3, 0.2, 0.4
+    cfg.brake_throttle, cfg.brake_time_s = -0.3, 0.2
     img = render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)])
     est = Vision(prof.vision, W, H).process(img)
     c = Controller(cfg)
@@ -317,3 +316,10 @@ def test_deadman_grace():
     assert not g.allowed(0.35, False, False, 0.02, auto=True)  # disconnect: no grace
     g.estop = True
     assert not g.allowed(0.4, True, True, 0.02, auto=True)     # e-stop is immediate
+
+
+def test_straight_stays_straight_phase(prof):
+    est = Vision(prof.vision, W, H).process(render(prof, [straight(-0.3), straight(0.3)]))
+    cmd = Controller(prof.control).update(est, 0.0)
+    assert cmd.phase == "straight" and abs(cmd.kappa_preview) < 0.1
+    assert cmd.throttle == prof.control.straight_throttle
