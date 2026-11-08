@@ -25,24 +25,34 @@ import numpy as np  # noqa: E402
 from racer import profile  # noqa: E402
 
 
-def tape_pixels(bgr: np.ndarray, roi_top: float, roi_bottom: float,
-                min_sat: int = 70, min_dist: float = 40.0) -> np.ndarray:
-    """HSV values of likely tape pixels in the ROI (Nx3)."""
+def tape_pixels(bgr: np.ndarray, roi_top: float, roi_bottom: float, hue_center: float,
+                hue_window: float = 15, min_sat: int = 70, min_val: int = 35,
+                min_dist: float = 25.0) -> np.ndarray:
+    """HSV values of likely tape pixels in the ROI (Nx3).
+
+    Tape = saturated, not too dark, clearly different from the median floor
+    colour, and with a hue near `hue_center` (taken from the base profile, so
+    a dark/noisy frame cannot drag the range onto the floor)."""
     h = bgr.shape[0]
     roi = bgr[int(roi_top * h):int(roi_bottom * h)]
     lab = cv2.cvtColor(roi, cv2.COLOR_BGR2LAB).reshape(-1, 3).astype(np.float32)
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV).reshape(-1, 3)
     floor = np.median(lab, axis=0)
     dist = np.linalg.norm(lab - floor, axis=1)
-    sel = (dist > min_dist) & (hsv[:, 1] >= min_sat)
+    hue = hsv[:, 0].astype(np.float32)
+    dh = np.abs(hue - hue_center)
+    dh = np.minimum(dh, 180 - dh)                      # hue is circular
+    sel = (dist > min_dist) & (hsv[:, 1] >= min_sat) & (hsv[:, 2] >= min_val) & (dh <= hue_window)
     return hsv[sel]
 
 
-def thresholds(samples: np.ndarray, margin=(4, 25, 25)):
+def thresholds(samples: np.ndarray, margin=(3, 25, 20), min_val: int = 30):
     lo = np.percentile(samples, 3, axis=0) - margin
     hi = np.percentile(samples, 97, axis=0) + margin
     lo = np.clip(lo, 0, [179, 255, 255]).astype(int)
     hi = np.clip(hi, 0, [179, 255, 255]).astype(int)
+    lo[2] = max(lo[2], min_val)
+    hi[1:] = 255                                        # brighter/more saturated is still tape
     return lo.tolist(), hi.tolist()
 
 
@@ -55,6 +65,7 @@ def main():
     ap.add_argument("--positions", type=int, default=4)
     ap.add_argument("--max-exposure-us", type=int, default=8000)
     ap.add_argument("--settle-s", type=float, default=3.0)
+    ap.add_argument("--tape-hue", type=float, help="OpenCV hue (0-179) of the tape; default: centre of the base profile range (orange ~12)")
     ap.add_argument("--out", help="output path (default profiles/<date>_<venue>.yaml)")
     args = ap.parse_args()
 
@@ -64,6 +75,8 @@ def main():
     shots = Path("logs") / f"calib_{time.strftime('%Y%m%d_%H%M%S')}"
     shots.mkdir(parents=True)
 
+    lo0, hi0 = prof.vision.hsv_lower[0], prof.vision.hsv_upper[0]
+    hue_center = args.tape_hue if args.tape_hue is not None else (lo0 + hi0) / 2
     cam = PiCamera(prof.camera, auto=True)
     try:
         print(f"letting auto exposure settle for {args.settle_s:.0f} s ...")
@@ -88,7 +101,7 @@ def main():
             f = cam.get(timeout=1.0)
             img = f[0]
             cv2.imwrite(str(shots / f"{i:02d}.jpg"), img)
-            px = tape_pixels(img, prof.vision.roi_top, prof.vision.roi_bottom)
+            px = tape_pixels(img, prof.vision.roi_top, prof.vision.roi_bottom, hue_center)
             print(f"   {len(px)} tape pixels, median HSV {np.median(px, axis=0).astype(int).tolist() if len(px) else '-'}")
             if len(px):
                 samples.append(px)

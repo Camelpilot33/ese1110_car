@@ -9,6 +9,8 @@ Gamepad (F710, X/XInput mode):
   right stick X  steering (manual)    left stick Y  throttle (manual)
   X  toggle manual/auto    B  e-stop (latched)    START  clear e-stop
   A  mark a lap (press as the car crosses the start line)
+  D-pad up/down     +/- 0.02 on straight and turn throttle (live, logged)
+  D-pad left/right  -/+ 0.05 m lookahead (live, logged)
 """
 from __future__ import annotations
 
@@ -98,13 +100,25 @@ def main(argv=None) -> int:
                     mode = "auto" if mode == "manual" else "manual"
                     vision.reset()
                     print(f"mode -> {mode}")
+                elif b in ("dpad_up", "dpad_down"):
+                    d = 0.02 if b == "dpad_up" else -0.02
+                    ctrl.cfg.straight_throttle = round(ctrl.cfg.straight_throttle + d, 3)
+                    ctrl.cfg.turn_throttle = round(ctrl.cfg.turn_throttle + d, 3)
+                    print(f"throttle straight={ctrl.cfg.straight_throttle} turn={ctrl.cfg.turn_throttle}"
+                          f" (cap {prof.actuators.throttle_max})")
+                elif b in ("dpad_left", "dpad_right"):
+                    d = 0.05 if b == "dpad_right" else -0.05
+                    ctrl.cfg.lookahead_m = round(max(0.2, ctrl.cfg.lookahead_m + d), 3)
+                    print(f"lookahead={ctrl.cfg.lookahead_m}")
                 elif b == sc.lap_button:
                     if last_lap_t is not None:
                         laps.append(now - last_lap_t)
                         print(f"lap {len(laps)}: {laps[-1]:.3f} s  (best {min(laps):.3f})")
                     last_lap_t = now
                 if log:
-                    log.event("button", button=b, mode=mode)
+                    log.event("button", button=b, mode=mode,
+                              straight_throttle=ctrl.cfg.straight_throttle,
+                              turn_throttle=ctrl.cfg.turn_throttle, lookahead_m=ctrl.cfg.lookahead_m)
 
             est = vision.process(img, keep_mask=stream is not None)
             if mode == "auto":
@@ -157,6 +171,9 @@ def main(argv=None) -> int:
             print(f"log: {log.dir}  (dropped {log.dropped} frames)")
         if loop_ms:
             print(f"loop ms: mean {statistics.mean(loop_ms):.1f}  max {max(loop_ms):.1f}")
+        c = ctrl.cfg
+        print(f"final: straight_throttle={c.straight_throttle} turn_throttle={c.turn_throttle} "
+              f"lookahead_m={c.lookahead_m}  (copy into the profile to keep)")
         if laps:
             print(f"laps: {len(laps)}  best {min(laps):.3f}  "
                   f"mean of last 5 {statistics.mean(laps[-5:]):.3f}")

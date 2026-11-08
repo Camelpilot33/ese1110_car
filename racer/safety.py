@@ -26,6 +26,9 @@ BUTTON_NAMES = {0x130: "a", 0x131: "b", 0x133: "x", 0x134: "y", 0x136: "lb",
 AXIS_NAMES = {0x00: "ljx", 0x01: "ljy", 0x02: "lt", 0x03: "rjx", 0x04: "rjy",
               0x05: "rt", 0x10: "dx", 0x11: "dy"}
 
+# D-pad is reported as hat axes; edges become pseudo-button presses.
+DPAD = {"dx": ("dpad_left", "dpad_right"), "dy": ("dpad_up", "dpad_down")}
+
 _JSIOCGAXES, _JSIOCGBUTTONS = 0x80016A11, 0x80016A12
 _JSIOCGAXMAP, _JSIOCGBTNMAP = 0x80406A32, 0x80406A34
 _JS_EVENT = struct.Struct("IhBB")
@@ -79,7 +82,12 @@ class Gamepad:
                                 self.buttons[name] = bool(value)
                         elif etype & 0x02:
                             name = AXIS_NAMES.get(axis_map[number], hex(axis_map[number]))
-                            self.axes[name] = value / 32767.0
+                            v = value / 32767.0
+                            if name in DPAD and not (etype & 0x80) and abs(v) > 0.5 \
+                                    and abs(self.axes.get(name, 0.0)) <= 0.5:
+                                with self._lock:
+                                    self._presses.append(DPAD[name][v > 0])
+                            self.axes[name] = v
             except OSError:
                 pass
             # Disconnected: drop all state so nothing stays "held".
