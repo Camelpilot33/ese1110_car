@@ -445,3 +445,15 @@ def test_lone_inner_line_recognised_from_history(prof):
     v2 = Vision(prof.vision, W, H)
     est2 = v2.process(render(prof, [straight(-0.10)]))
     assert len(est2.right_pts) > 3 and est2.x_at(0.6) < 0
+
+
+def test_turn_steer_bias_only_in_turns(prof):
+    c = prof.control
+    c.mode = "pid"
+    est_t = Vision(prof.vision, W, H).process(render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)]))
+    est_s = Vision(prof.vision, W, H).process(render(prof, [straight(-0.3), straight(0.3)]))
+    base_t = Controller(c).update(est_t, 0.0).steering
+    base_s = Controller(c).update(est_s, 0.0).steering
+    c.turn_steer_bias = 0.15
+    assert Controller(c).update(est_t, 0.0).steering == pytest.approx(max(-1.0, base_t - 0.15), abs=1e-6)
+    assert Controller(c).update(est_s, 0.0).steering == pytest.approx(base_s, abs=1e-6)

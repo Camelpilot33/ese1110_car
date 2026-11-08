@@ -194,7 +194,10 @@ class Controller:
         e = math.atan2(tx, ty)                       # heading error to target, + = right
         lim = math.radians(cfg.max_error_deg)
         e = float(np.clip(e, -lim, lim))             # one bad frame cannot kick D
-        steer = float(np.clip(self.pid.update(e, dt), -1.0, 1.0))
+        # Extra steering toward the inside, scaled by the turn factor (0 on
+        # straights): the car needs more lock in the turns than the PID asks for.
+        bias = math.copysign(cfg.turn_steer_bias * f, kappa) if cfg.turn_steer_bias else 0.0
+        steer = float(np.clip(self.pid.update(e, dt) + bias, -1.0, 1.0))
         a = cfg.steer_smoothing
         self._steer = a * self._steer + (1 - a) * steer
 
