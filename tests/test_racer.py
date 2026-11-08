@@ -416,3 +416,15 @@ def test_pid_speed_output(prof):
     turn_cmd = Controller(c).update(Vision(prof.vision, W, H).process(
         render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)])), 0.0)
     assert c.speed_min <= turn_cmd.throttle < straight_cmd.throttle - 0.05
+
+
+def test_lookahead_on_sharp_short_fit_stays_ahead(prof):
+    """Regression: run 5 turn-entry frames collapsed the target to y=0 (89 deg error)."""
+    from racer.vision import TrackEstimate
+    for coeffs, y_max in (([0.04, 0.39, -2.07], 0.54), ([0.06, 0.16, -1.83], 0.54),
+                          ([-0.25, 2.04, -4.11], 0.49)):
+        est = TrackEstimate(valid=True, coeffs=np.array(coeffs), y_min=0.2, y_max=y_max)
+        x, y = lookahead_point(est, 0.7)
+        assert y > 0.4, (coeffs, x, y)
+        assert abs(math.degrees(math.atan2(x, y))) < 50
+        assert x < 0          # path bends left -> target left

@@ -33,16 +33,36 @@ class Command:
     error: float = 0.0           # heading error to target (rad, + = right)
 
 
-def lookahead_point(est: TrackEstimate, ld: float) -> Tuple[float, float]:
-    """Point on the fitted path at straight-line distance ~ld from the rear axle.
+def path_x(est: TrackEstimate, y: float) -> float:
+    """Lateral position of the path at distance y. Beyond the farthest observed
+    point the path continues in a straight line along its tangent there: the
+    quadratic itself swings wildly when extrapolated on a sharp, short fit."""
+    if y <= est.y_max:
+        return est.x_at(y)
+    c = est.coeffs
+    slope = c[1] + 2 * c[2] * est.y_max
+    return est.x_at(est.y_max) + slope * (y - est.y_max)
 
-    Extrapolates at most 30 % past the farthest observed point."""
-    y_cap = max(est.y_max * 1.3, est.y_min)
-    y = min(ld, y_cap)
-    for _ in range(5):
-        x = est.x_at(y)
-        y = min(math.sqrt(max(ld * ld - x * x, 1e-6)), y_cap)
-    return est.x_at(y), y
+
+def lookahead_point(est: TrackEstimate, ld: float) -> Tuple[float, float]:
+    """First point along the path whose straight-line distance from the rear
+    axle reaches ld. Walks the path (robust on sharp curves, where solving
+    x(y)^2 + y^2 = ld^2 by iteration collapses to a point beside the car).
+    Extends at most 30 % past the farthest observed point."""
+    y_lo = max(est.y_min, 0.05)
+    y_hi = max(est.y_max * 1.3, y_lo + 1e-3)
+    ys = np.linspace(y_lo, y_hi, 60)
+    xs = np.array([path_x(est, y) for y in ys])
+    d = np.hypot(xs, ys)
+    idx = np.flatnonzero(d >= ld)
+    if len(idx) == 0:
+        return float(xs[-1]), float(ys[-1])       # path ends short: farthest point
+    i = int(idx[0])
+    if i == 0:
+        return float(xs[0]), float(ys[0])
+    # interpolate between samples i-1 and i
+    a = (ld - d[i - 1]) / max(d[i] - d[i - 1], 1e-9)
+    return float(xs[i - 1] + a * (xs[i] - xs[i - 1])), float(ys[i - 1] + a * (ys[i] - ys[i - 1]))
 
 
 def pure_pursuit(x: float, y: float, wheelbase: float, max_steer_rad: float) -> float:
@@ -172,6 +192,8 @@ class Controller:
         cfg = self.cfg
         tx, ty = self._target(est, cfg.lookahead_m, kappa, f)
         e = math.atan2(tx, ty)                       # heading error to target, + = right
+        lim = math.radians(cfg.max_error_deg)
+        e = float(np.clip(e, -lim, lim))             # one bad frame cannot kick D
         steer = float(np.clip(self.pid.update(e, dt), -1.0, 1.0))
         a = cfg.steer_smoothing
         self._steer = a * self._steer + (1 - a) * steer

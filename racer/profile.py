@@ -105,6 +105,7 @@ class ControlCfg:
     kd: float = 0.08
     i_limit: float = 0.5             # clamp on the integral (rad*s)
     d_filter: float = 0.6            # EMA on the derivative (0 = raw)
+    max_error_deg: float = 60.0      # heading error is clamped to this before the PID
     # --- pid mode: speed = speed_max - drops, clamped to [speed_min, speed_max]
     speed_max: float = 0.45
     speed_min: float = 0.36          # car does not move below ~0.35

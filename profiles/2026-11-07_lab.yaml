@@ -60,6 +60,7 @@ control:
   kd: 0.1
   i_limit: 0.5
   d_filter: 0.6
+  max_error_deg: 60.0
   speed_max: 0.45
   speed_min: 0.36
   speed_turn_drop: 0.06
