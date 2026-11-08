@@ -55,6 +55,7 @@ def main():
     prof = profile.load(args.profile or run / "profile.yaml", args.set)
     from racer.actuators import steer_limits
     prof.control.steer_min, prof.control.steer_max = steer_limits(prof.actuators)
+    prof.control.mpc.half_width_m = prof.vision.track_width_m / 2
     vision = Vision(prof.vision, prof.camera.width, prof.camera.height)
     ctrl = Controller(prof.control)
     states = load_states(run)
@@ -81,7 +82,7 @@ def main():
             txt = f"#{idx} {cmd.phase} s={cmd.steering:+.2f} t={cmd.throttle:+.2f} k={cmd.kappa_preview:+.2f}"
             if "steering" in st:
                 txt += f" log_s={st['steering']:+.2f}"
-            vis = draw_debug(img, vision, est, cmd.target, txt)
+            vis = draw_debug(img, vision, est, cmd.target, txt, plan=cmd.plan)
             vis = cv2.resize(vis, (vis.shape[1] * 2, vis.shape[0] * 2), interpolation=cv2.INTER_NEAREST)
             if args.video:
                 if writer is None:

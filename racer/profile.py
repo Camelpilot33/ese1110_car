@@ -103,8 +103,48 @@ class ActuatorCfg:
 
 
 @dataclass
+class MpcCfg:
+    """control.mode = mpc (racer/mpc.py). Speeds in ground units per second."""
+    horizon_n: int = 10              # plan points over the visible track
+    margin_m: float = 0.05           # keep the car centre this far inside each tape line
+    half_width_m: float = 0.20       # set from vision.track_width_m / 2 by run.py
+    w_first: float = 1.0             # weight of the first curvature term
+    w_rate: float = 1.0              # penalty on changing the start curvature (steering rate)
+    w_centre: float = 0.05           # weak pull toward the lane centre
+    w_len: float = 400.0             # path-length weight: higher = tighter (inside) line in turns
+    kc_deadband: float = 0.3         # centre-line curvature below this (1/m) counts as straight
+    track_lookahead_m: float = 0.45  # steer by pure pursuit to the planned line this far ahead
+    track_lookahead_per_v: float = 0.05  # + this much per unit of speed
+    # speed planning
+    a_lat: float = 3.4               # lateral grip: v <= sqrt(a_lat / kappa); 3.4 matches run 11's turn speed
+    a_brake: float = 3.0
+    a_accel: float = 2.0
+    v_max: float = 2.6
+    r_unseen_m: float = 0.67         # assume a turn this tight may start just past the view
+    speed_lead_s: float = 0.15       # read the speed profile this far ahead
+    brake_margin: float = 0.15       # target this much below the estimate -> coast/brake
+    speed_skip_n: int = 2            # ignore the first plan segments (pose correction) for speed
+    # speed model (no encoder): v_ss = speed_gain * (throttle - speed_offset), lag speed_tau_s
+    speed_gain: float = 7.0
+    speed_offset: float = 0.18
+    speed_tau_s: float = 0.3
+    thr_min: float = 0.38            # moving floor
+    thr_max: float = 0.55
+    thr_brake: float = 0.33          # coasting throttle when slowing down
+    # steering model
+    understeer_k: float = 0.15       # kappa_actual = kappa_cmd / (1 + k v^2); the estimator's bias learns the rest
+    latency_s: float = 0.06          # camera + loop + servo
+    steer_delay_s: float = 0.1       # a steering command acts on the car this much later (servo lag)
+    # line tracker (state estimation)
+    gate_m: float = 0.06             # a new vision line further than this from the prediction is a glitch
+    max_coast: int = 6               # ...use the predicted line for at most this many frames
+    line_blend: float = 0.7          # weight of the new measurement when accepted
+
+
+@dataclass
 class ControlCfg:
-    mode: str = "pure_pursuit"       # pure_pursuit | pid
+    mode: str = "pure_pursuit"       # pure_pursuit | pid | mpc
+    mpc: MpcCfg = field(default_factory=MpcCfg)
     track_direction: str = "both"    # left | right | both: wrong-way bend readings are ignored
     steer_min: float = -1.0          # command range; set from actuators' *_limit_us by run.py
     steer_max: float = 1.0

@@ -514,3 +514,118 @@ def test_controller_uses_extended_left_range(prof):
     assert Controller(c).update(est, 0.0).steering == pytest.approx(-1.0)
     c.steer_min = -1.48
     assert Controller(c).update(est, 0.0).steering < -1.2
+
+
+# --- mpc ---------------------------------------------------------------------
+
+def _mpc_cfg(prof):
+    c = prof.control
+    c.mode = "mpc"
+    c.mpc.half_width_m = prof.vision.track_width_m / 2
+    return c
+
+
+def _centre(prof, lines):
+    from racer.mpc import LineTracker
+    est = Vision(prof.vision, W, H).process(render(prof, lines))
+    return LineTracker.measured_line(est), est
+
+
+def test_ego_transform_signs():
+    from racer.mpc import ego_transform
+    p = np.array([[0.0, 1.0]])
+    np.testing.assert_allclose(ego_transform(p, 0.5, 0.0), [[0.0, 0.5]], atol=1e-9)
+    # after turning right, a point straight ahead appears to the left
+    assert ego_transform(p, 0.3, 1.0)[0, 0] < 0
+
+
+def test_mpc_plan_straight_centred(prof):
+    from racer.mpc import plan_line
+    c = _mpc_cfg(prof)
+    centre, _ = _centre(prof, [straight(-0.3), straight(0.3)])
+    plan = plan_line(centre, c.mpc, 0.3, 0.0)
+    assert np.all(np.abs(plan.offsets) < 0.03) and np.all(np.abs(plan.kappa) < 0.3)
+    np.testing.assert_allclose(plan.points[0], [0, 0])           # starts at the car
+
+
+def test_mpc_plan_left_turn_inside_within_lane(prof):
+    from racer.mpc import plan_line
+    c = _mpc_cfg(prof)
+    centre, _ = _centre(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)])
+    plan = plan_line(centre, c.mpc, 0.3, 0.0)
+    bound = 0.3 - c.mpc.margin_m
+    assert np.all(np.abs(plan.offsets) <= bound + 1e-6)
+    assert plan.offsets[len(plan.offsets) // 2] < -0.05        # toward the inside (left)
+    c.mpc.w_len = 0.0                                          # pure min curvature rides the outside
+    assert plan_line(centre, c.mpc, 0.3, 0.0).offsets[-1] > plan.offsets[-1] + 0.05
+
+
+def test_mpc_plan_starts_with_car_heading(prof):
+    """The plan starts at the car with its heading. Inside the allowed band on
+    a straight it simply goes straight; outside the band it bends back in."""
+    from racer.mpc import plan_line
+    c = _mpc_cfg(prof)
+    inside, _ = _centre(prof, [straight(-0.45), straight(0.15)])     # car 15 cm right of centre
+    plan = plan_line(inside, c.mpc, 0.3, 0.0)
+    np.testing.assert_allclose(plan.points[0], [0, 0])
+    assert np.all(np.abs(plan.points[:, 0]) < 0.02)                  # no needless swerve
+    ys = np.linspace(0.3, 1.2, 15)
+    outside = np.c_[np.full_like(ys, -0.35), ys]                     # centre 35 cm left: car outside band
+    plan = plan_line(outside, c.mpc, 0.3, 0.0)
+    bound = 0.3 - c.mpc.margin_m
+    assert np.all(np.abs(plan.offsets) <= bound + 1e-6)
+    assert plan.points[-1, 0] < -0.05 and np.min(plan.kappa[:4]) < 0   # bends back left
+
+
+def test_mpc_rate_term_pulls_start_curvature(prof):
+    from racer.mpc import plan_line
+    c = _mpc_cfg(prof)
+    centre, _ = _centre(prof, [straight(-0.3), straight(0.3)])
+    c.mpc.w_rate = 0.5
+    a = plan_line(centre, c.mpc, 0.3, +2.0).kappa[0]
+    b = plan_line(centre, c.mpc, 0.3, -2.0).kappa[0]
+    assert a > b
+
+
+def test_mpc_controller_turn_vs_straight(prof):
+    c = _mpc_cfg(prof)
+    est_s = Vision(prof.vision, W, H).process(render(prof, [straight(-0.3), straight(0.3)]))
+    est_t = Vision(prof.vision, W, H).process(render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)]))
+    outs = {}
+    for name, est in (("s", est_s), ("t", est_t)):
+        ctrl = Controller(c)
+        for i in range(120):
+            ctrl.mpc.tracker.line = None          # static picture: no ego-motion carry-over
+            outs[name] = ctrl.update(est, i / 60)
+    cs, ct = outs["s"], outs["t"]
+    assert abs(cs.steering) < 0.15 and ct.steering < -0.3
+    assert cs.info["v_target"] > ct.info["v_target"]
+    assert c.mpc.thr_brake <= ct.throttle <= cs.throttle <= c.mpc.thr_max
+
+
+def test_line_tracker_rejects_glitch_and_carries_line():
+    from racer.mpc import LineTracker
+    from racer.profile import MpcCfg
+    from racer.vision import TrackEstimate
+    lt = LineTracker(MpcCfg())
+    good = TrackEstimate(valid=True, coeffs=np.array([0.0, 0.0, 0.0]), y_min=0.2, y_max=0.8)
+    bad = TrackEstimate(valid=True, coeffs=np.array([0.3, 0.0, 0.0]), y_min=0.2, y_max=0.8)
+    lt.update(good)
+    lt.predict(1 / 60, 0.0, 0.0)
+    line, gated = lt.update(bad)
+    assert gated and np.all(np.abs(line[:, 0]) < 0.02)
+    for _ in range(MpcCfg().max_coast + 1):          # persistent change is accepted eventually
+        lt.predict(1 / 60, 0.0, 0.0)
+        line, gated = lt.update(bad)
+    assert not gated and np.median(line[:, 0]) > 0.2
+
+
+def test_mpc_is_fast(prof):
+    import time
+    c = _mpc_cfg(prof)
+    est = Vision(prof.vision, W, H).process(render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)]))
+    ctrl = Controller(c)
+    t = time.perf_counter()
+    for i in range(100):
+        ctrl.update(est, i / 60)
+    assert (time.perf_counter() - t) / 100 < 0.005      # laptop; Pi ~3x slower

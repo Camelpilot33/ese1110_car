@@ -11,6 +11,7 @@ Gamepad (F710, X/XInput mode):
   A  mark a lap (press as the car crosses the start line)
   D-pad up/down     +/- 0.02 on speed_max (pid mode) or straight+turn throttle (live, logged)
   D-pad left/right  -/+ 0.02 speed_min / turn floor (pid mode) or -/+ 0.05 m lookahead (live, logged)
+  mpc mode: D-pad up/down = cornering grip a_lat +/-0.25, right/left = tightness w_len x1.25 / x0.8
 """
 from __future__ import annotations
 
@@ -40,6 +41,7 @@ def main(argv=None) -> int:
     prof = profile.load(args.profile, args.set)
     from racer.actuators import Actuators, Battery, MockActuators, steer_limits
     prof.control.steer_min, prof.control.steer_max = steer_limits(prof.actuators)
+    prof.control.mpc.half_width_m = prof.vision.track_width_m / 2
     from racer.camera import PiCamera
     from racer.safety import Gamepad, SafetyGate
 
@@ -102,6 +104,14 @@ def main(argv=None) -> int:
                     mode = "auto" if mode == "manual" else "manual"
                     vision.reset()
                     print(f"mode -> {mode}")
+                elif b in ("dpad_up", "dpad_down") and ctrl.cfg.mode == "mpc":
+                    m = ctrl.cfg.mpc
+                    m.a_lat = round(max(1.0, m.a_lat + (0.25 if b == "dpad_up" else -0.25)), 2)
+                    print(f"mpc a_lat (cornering grip)={m.a_lat}")
+                elif b in ("dpad_left", "dpad_right") and ctrl.cfg.mode == "mpc":
+                    m = ctrl.cfg.mpc
+                    m.w_len = round(max(0.0, m.w_len * (1.25 if b == "dpad_right" else 0.8)), 1)
+                    print(f"mpc w_len (tightness)={m.w_len}  (right = tighter line in turns)")
                 elif b in ("dpad_up", "dpad_down") and ctrl.cfg.mode == "pid":
                     d = 0.02 if b == "dpad_up" else -0.02
                     c = ctrl.cfg
@@ -131,7 +141,7 @@ def main(argv=None) -> int:
                 if log:
                     log.event("button", button=b, mode=mode,
                               straight_throttle=ctrl.cfg.straight_throttle, speed_max=ctrl.cfg.speed_max,
-                              speed_min=ctrl.cfg.speed_min,
+                              speed_min=ctrl.cfg.speed_min, a_lat=ctrl.cfg.mpc.a_lat, w_len=ctrl.cfg.mpc.w_len,
                               turn_throttle=ctrl.cfg.turn_throttle, lookahead_m=ctrl.cfg.lookahead_m)
 
             ok = gate.allowed(now, pad.held(sc.deadman_button), pad.connected,
@@ -166,12 +176,14 @@ def main(argv=None) -> int:
                          "throttle": round(throttle, 4), "cmd_throttle": round(cmd.throttle, 4),
                          "ok": ok, "why": gate.reasons, "phase": cmd.phase, "lost": cmd.lost,
                          "kappa": round(cmd.kappa_preview, 3), "turn_f": round(cmd.turn_factor, 3), "err": round(cmd.error, 4), "target": cmd.target,
-                         "loop_ms": round(dt_ms, 2), "latency_ms": round(latency_ms, 2),
+                         "mpc": cmd.info, "loop_ms": round(dt_ms, 2), "latency_ms": round(latency_ms, 2),
                          "battery_v": volts, "vision": est.summary()}, img)
             if stream:
                 txt = f"{mode} {'GO' if ok else ','.join(gate.reasons)} s={cmd.steering:+.2f} t={throttle:+.2f} {latency_ms:.0f}ms"
                 try:
-                    stream.publish(draw_debug(img, vision, est, cmd.target, txt))
+                    if cmd.info:
+                        txt += f" v{cmd.info['v_est']:.1f}>{cmd.info['v_target']:.1f}"
+                    stream.publish(draw_debug(img, vision, est, cmd.target, txt, plan=cmd.plan))
                 except Exception as e:  # debug view must never stop the car loop
                     print(f"stream error: {e}")
             if now - last_print > 2.0:

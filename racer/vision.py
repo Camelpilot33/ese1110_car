@@ -283,7 +283,8 @@ class Vision:
 
 
 def draw_debug(bgr: np.ndarray, vision: Vision, est: TrackEstimate,
-               target: Optional[tuple] = None, text: str = "") -> np.ndarray:
+               target: Optional[tuple] = None, text: str = "",
+               plan: Optional[np.ndarray] = None) -> np.ndarray:
     """Overlay mask, detected lines, fitted centre line and lookahead target."""
     img = bgr.copy()
     if img.shape[1] != vision.width:
@@ -305,6 +306,8 @@ def draw_debug(bgr: np.ndarray, vision: Vision, est: TrackEstimate,
     if est.valid:
         ys = np.linspace(est.y_min, est.y_max, 20)
         dots(np.c_[[est.x_at(y) for y in ys], ys], (0, 255, 0))
+    if plan is not None and len(plan):
+        dots(np.asarray(plan), (255, 255, 0))      # planned racing line (cyan)
     if target is not None:
         uv = vision.mapper.ground_to_pixels(np.array([target]))[0]
         if np.isfinite(uv).all() and 0 <= uv[0] < img.shape[1] and 0 <= uv[1] < img.shape[0]:

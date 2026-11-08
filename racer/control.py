@@ -6,6 +6,9 @@ Two modes (control.mode):
   pid           PID on the heading error to the lookahead point; speed is a
                 controller output: speed_max minus slow-downs for an upcoming
                 turn, steering effort and tracking error
+  mpc           racer/mpc.py: Kalman state estimate, minimum-curvature racing
+                line over the visible lane (receding horizon), speed profile
+                with grip/brake/accel limits
 """
 from __future__ import annotations
 
@@ -30,6 +33,8 @@ class Command:
     phase: str = STRAIGHT
     lost: bool = False
     turn_factor: float = 0.0
+    plan: Optional[np.ndarray] = None   # mpc: planned racing line (car frame)
+    info: Optional[dict] = None          # mpc: estimator/speed details for logging
     error: float = 0.0           # heading error to target (rad, + = right)
 
 
@@ -126,6 +131,11 @@ class Controller:
         self._last_t: Optional[float] = None
         self.pid = PID(cfg.kp, cfg.ki, cfg.kd, cfg.i_limit, cfg.d_filter)
         self._start_t: Optional[float] = None
+        self.mpc = None
+        if cfg.mode == "mpc":
+            from .mpc import MpcController
+            self.mpc = MpcController(cfg.mpc, cfg.wheelbase_m, cfg.max_steer_deg,
+                                     cfg.steer_min, cfg.steer_max, cfg.mpc.half_width_m)
 
     def on_start(self, now: float) -> None:
         """Called when the car is (re)started: drop state from the previous
@@ -137,6 +147,8 @@ class Controller:
         self._f = 0.0
         self._last_t = None
         self.pid.reset()
+        if self.mpc is not None:
+            self.mpc.reset()
         self._start_t = now
 
     def update(self, est: TrackEstimate, now: float) -> Command:
@@ -147,13 +159,15 @@ class Controller:
             if frac >= 1.0:
                 self._start_t = None
             else:
-                floor = self.cfg.speed_min if self.cfg.mode == "pid" else self.cfg.turn_throttle
+                floor = {"pid": self.cfg.speed_min, "mpc": self.cfg.mpc.thr_min}.get(self.cfg.mode, self.cfg.turn_throttle)
                 if cmd.throttle > floor:
                     cmd.throttle = floor + (cmd.throttle - floor) * max(0.0, frac)
         return cmd
 
     def _update(self, est: TrackEstimate, now: float) -> Command:
         cfg = self.cfg
+        if self.mpc is not None:
+            return self._mpc_step(est, now)
         if not est.valid:
             lost = now - self._last_valid_t > cfg.lost_hold_s
             if lost:
@@ -257,6 +271,25 @@ class Controller:
         if now < self._brake_until:
             speed = cfg.brake_throttle
         return Command(self._steer, speed, (tx, ty), kappa, self.phase, turn_factor=f, error=e)
+
+    def _mpc_step(self, est: TrackEstimate, now: float) -> Command:
+        if est.valid:
+            self._last_valid_t = now
+        elif now - self._last_valid_t > self.cfg.lost_hold_s:
+            self.mpc.reset()
+            return Command(0.0, 0.0, lost=True)
+        out = self.mpc.update(est, now)
+        plan = out.plan
+        target = None
+        kmax = 0.0
+        if plan is not None and len(plan.points):
+            target = self.mpc._target
+            kmax = float(plan.kappa[np.argmax(np.abs(plan.kappa))])
+        info = {"v_est": round(out.v_est, 3), "v_target": round(out.v_target, 3),
+                "gated": out.gated, "coasted": out.coasted,
+                "plan_d": None if plan is None else [round(float(x), 3) for x in plan.offsets]}
+        return Command(out.steering, out.throttle, target, kmax, STRAIGHT,
+                       plan=None if plan is None else plan.points, info=info)
 
     def _update_phase(self, kappa: float, now: float) -> None:
         cfg = self.cfg
