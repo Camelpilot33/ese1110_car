@@ -57,7 +57,7 @@ actuators:
 control:
   mode: pid
   kp: 1.0
-  ki: 0.3
+  ki: 0.0
   kd: 0.1
   i_limit: 0.5
   d_filter: 0.6
