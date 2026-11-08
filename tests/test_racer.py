@@ -493,3 +493,24 @@ def test_soft_start_ramp(prof):
     assert 0.38 < th[1] < th[2]
     assert th[3] == pytest.approx(ctrl.update(est, 11.6).throttle, abs=1e-3)  # ramp finished
     assert th[3] > 0.5
+
+
+def test_extended_left_steering_keeps_mapping():
+    from racer.actuators import steer_limits
+    cfg = ActuatorCfg(steering_left_limit_us=2200)
+    lo, hi = steer_limits(cfg)
+    assert lo == pytest.approx(-(2200 - 1689) / (2035 - 1689)) and hi == 1.0
+    assert steering_pulse_us(cfg, -0.5) == pytest.approx(steering_pulse_us(ActuatorCfg(), -0.5))
+    assert steering_pulse_us(cfg, -1.0) == pytest.approx(2035)
+    assert steering_pulse_us(cfg, -9.0) == pytest.approx(2200)
+    assert steering_pulse_us(cfg, +9.0) == pytest.approx(1343)
+
+
+def test_controller_uses_extended_left_range(prof):
+    from racer.vision import TrackEstimate
+    est = TrackEstimate(valid=True, coeffs=np.array([-0.6, 0.0, 0.0]), y_min=0.2, y_max=1.0)
+    c = prof.control
+    c.mode = "pid"
+    assert Controller(c).update(est, 0.0).steering == pytest.approx(-1.0)
+    c.steer_min = -1.48
+    assert Controller(c).update(est, 0.0).steering < -1.2

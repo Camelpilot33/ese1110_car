@@ -53,6 +53,8 @@ def main():
 
     run = Path(args.run)
     prof = profile.load(args.profile or run / "profile.yaml", args.set)
+    from racer.actuators import steer_limits
+    prof.control.steer_min, prof.control.steer_max = steer_limits(prof.actuators)
     vision = Vision(prof.vision, prof.camera.width, prof.camera.height)
     ctrl = Controller(prof.control)
     states = load_states(run)

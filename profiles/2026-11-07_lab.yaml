@@ -48,6 +48,8 @@ actuators:
   steering_left_us: 2035
   steering_center_us: 1689
   steering_right_us: 1343
+  steering_left_limit_us: 2200
+  steering_right_limit_us: null
   throttle_forward_us: 2035
   throttle_stop_us: 1506
   throttle_reverse_us: 1302
@@ -57,6 +59,8 @@ actuators:
 control:
   mode: pid
   track_direction: left
+  steer_min: -1.0
+  steer_max: 1.0
   start_ramp_s: 1.5
   kp: 1.0
   ki: 0.0

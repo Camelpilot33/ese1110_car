@@ -38,7 +38,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     prof = profile.load(args.profile, args.set)
-    from racer.actuators import Actuators, Battery, MockActuators
+    from racer.actuators import Actuators, Battery, MockActuators, steer_limits
+    prof.control.steer_min, prof.control.steer_max = steer_limits(prof.actuators)
     from racer.camera import PiCamera
     from racer.safety import Gamepad, SafetyGate
 

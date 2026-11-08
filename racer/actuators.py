@@ -18,8 +18,22 @@ def _interp(x: float, x0: float, x1: float, y0: float, y1: float) -> float:
     return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
 
 
+def steer_limits(cfg: ActuatorCfg) -> tuple:
+    """Command range (lo, hi). -1/+1 are the calibrated left/right pulses; the
+    optional *_limit_us extend the range past them at the same slope, so
+    commands inside +/-1 map exactly as before."""
+    lo = -1.0
+    if cfg.steering_left_limit_us is not None:
+        lo = -(cfg.steering_left_limit_us - cfg.steering_center_us) / (cfg.steering_left_us - cfg.steering_center_us)
+    hi = 1.0
+    if cfg.steering_right_limit_us is not None:
+        hi = (cfg.steering_right_limit_us - cfg.steering_center_us) / (cfg.steering_right_us - cfg.steering_center_us)
+    return lo, hi
+
+
 def steering_pulse_us(cfg: ActuatorCfg, steering: float) -> float:
-    s = max(-1.0, min(1.0, steering))
+    lo, hi = steer_limits(cfg)
+    s = max(lo, min(hi, steering))
     if s < 0:
         return _interp(s, 0, -1, cfg.steering_center_us, cfg.steering_left_us)
     return _interp(s, 0, 1, cfg.steering_center_us, cfg.steering_right_us)
@@ -94,7 +108,8 @@ class MockActuators:
         self.steering = self.throttle = 0.0
 
     def set(self, steering: float, throttle: float) -> None:
-        self.steering = max(-1.0, min(1.0, steering))
+        lo, hi = steer_limits(self.cfg)
+        self.steering = max(lo, min(hi, steering))
         self.throttle = max(-self.cfg.reverse_max, min(self.cfg.throttle_max, throttle))
 
     def stop(self) -> None:

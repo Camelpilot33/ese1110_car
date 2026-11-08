@@ -66,14 +66,15 @@ def lookahead_point(est: TrackEstimate, ld: float) -> Tuple[float, float]:
     return float(xs[i - 1] + a * (xs[i] - xs[i - 1])), float(ys[i - 1] + a * (ys[i] - ys[i - 1]))
 
 
-def pure_pursuit(x: float, y: float, wheelbase: float, max_steer_rad: float) -> float:
+def pure_pursuit(x: float, y: float, wheelbase: float, max_steer_rad: float,
+                 lo: float = -1.0, hi: float = 1.0) -> float:
     """Normalised steering command for a target point (x right, y forward)."""
     ld2 = x * x + y * y
     if ld2 < 1e-6:
         return 0.0
     kappa = 2.0 * x / ld2
     delta = math.atan(wheelbase * kappa)
-    return float(np.clip(delta / max_steer_rad, -1.0, 1.0))
+    return float(np.clip(delta / max_steer_rad, lo, hi))
 
 
 def preview_curvature(est: TrackEstimate, preview_m: float) -> float:
@@ -206,7 +207,7 @@ class Controller:
         # Longer lookahead at higher throttle keeps pure pursuit stable.
         ld = cfg.lookahead_m + cfg.lookahead_speed_gain * max(0.0, throttle - cfg.lookahead_ref_throttle)
         tx, ty = self._target(est, ld, kappa, f)
-        steer = pure_pursuit(tx, ty, cfg.wheelbase_m, math.radians(cfg.max_steer_deg))
+        steer = pure_pursuit(tx, ty, cfg.wheelbase_m, math.radians(cfg.max_steer_deg), cfg.steer_min, cfg.steer_max)
         a = cfg.steer_smoothing
         self._steer = a * self._steer + (1 - a) * steer
         throttle = self._limit_saturation(throttle)
@@ -223,7 +224,9 @@ class Controller:
         """Near full lock the car cannot turn any tighter: shed speed so it
         can hold the line instead of running wide (understeer limiter)."""
         cfg = self.cfg
-        over = abs(self._steer) - cfg.sat_threshold
+        # near full lock = close to this side's limit (which may exceed 1)
+        lim = -cfg.steer_min if self._steer < 0 else cfg.steer_max
+        over = abs(self._steer) / lim - cfg.sat_threshold
         if over > 0 and throttle > 0 and cfg.sat_throttle_drop:
             throttle = max(0.0, throttle - cfg.sat_throttle_drop * over / max(1e-6, 1 - cfg.sat_threshold))
         return throttle
@@ -237,7 +240,7 @@ class Controller:
         # Extra steering toward the inside, scaled by the turn factor (0 on
         # straights): the car needs more lock in the turns than the PID asks for.
         bias = math.copysign(cfg.turn_steer_bias * f, kappa) if cfg.turn_steer_bias else 0.0
-        steer = float(np.clip(self.pid.update(e, dt) + bias, -1.0, 1.0))
+        steer = float(np.clip(self.pid.update(e, dt) + bias, cfg.steer_min, cfg.steer_max))
         a = cfg.steer_smoothing
         self._steer = a * self._steer + (1 - a) * steer
 

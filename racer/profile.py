@@ -89,6 +89,11 @@ class ActuatorCfg:
     steering_left_us: int = 2035
     steering_center_us: int = 1689
     steering_right_us: int = 1343
+    # Optional mechanical limits beyond the +/-1 calibration points (same slope):
+    # commands past -1/+1 are allowed up to these. Measured 2026-11-08: the
+    # wheels still turn further left up to ~2220 us.
+    steering_left_limit_us: Optional[int] = None
+    steering_right_limit_us: Optional[int] = None
     throttle_forward_us: int = 2035
     throttle_stop_us: int = 1506
     throttle_reverse_us: int = 1302
@@ -101,6 +106,8 @@ class ActuatorCfg:
 class ControlCfg:
     mode: str = "pure_pursuit"       # pure_pursuit | pid
     track_direction: str = "both"    # left | right | both: wrong-way bend readings are ignored
+    steer_min: float = -1.0          # command range; set from actuators' *_limit_us by run.py
+    steer_max: float = 1.0
     start_ramp_s: float = 0.0        # after each start, throttle ramps from the turn floor over this time
     # --- pid mode: steering = PID on heading error (rad) to the lookahead point
     kp: float = 1.2
