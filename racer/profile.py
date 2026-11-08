@@ -110,7 +110,11 @@ class ControlCfg:
     turn_exit_frames: int = 3
     brake_throttle: float = 0.0      # negative = brake pulse on turn entry
     brake_time_s: float = 0.0
-    racing_line_offset_m: float = 0.0  # shift target toward inside in turns
+    racing_line_offset_m: float = 0.0  # shift target toward the inside, scaled by turn factor
+    speed_blend: bool = True         # throttle blends straight->turn with the turn factor
+    turn_factor_smoothing: float = 0.5  # EMA on the falling turn factor (0 = none)
+    lookahead_speed_gain: float = 0.0   # extra lookahead (m) per unit throttle above ref
+    lookahead_ref_throttle: float = 0.36
     lost_hold_s: float = 0.25        # hold last steering this long when track is lost
 
 

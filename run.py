@@ -143,7 +143,7 @@ def main(argv=None) -> int:
                 log.log({"t": now, "frame": idx, "mode": mode, "steering": round(cmd.steering, 4),
                          "throttle": round(throttle, 4), "cmd_throttle": round(cmd.throttle, 4),
                          "ok": ok, "why": gate.reasons, "phase": cmd.phase, "lost": cmd.lost,
-                         "kappa": round(cmd.kappa_preview, 3), "target": cmd.target,
+                         "kappa": round(cmd.kappa_preview, 3), "turn_f": round(cmd.turn_factor, 3), "target": cmd.target,
                          "loop_ms": round(dt_ms, 2), "latency_ms": round(latency_ms, 2),
                          "battery_v": volts, "vision": est.summary()}, img)
             if stream:

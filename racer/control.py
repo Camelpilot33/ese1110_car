@@ -21,6 +21,7 @@ class Command:
     kappa_preview: float = 0.0
     phase: str = STRAIGHT
     lost: bool = False
+    turn_factor: float = 0.0
 
 
 def lookahead_point(est: TrackEstimate, ld: float) -> Tuple[float, float]:
@@ -65,6 +66,7 @@ class Controller:
         self._brake_until = 0.0
         self._last_valid_t = -1e9
         self._steer = 0.0
+        self._f = 0.0
 
     def update(self, est: TrackEstimate, now: float) -> Command:
         cfg = self.cfg
@@ -78,20 +80,33 @@ class Controller:
         kappa = preview_curvature(est, cfg.brake_preview_m)
         self._update_phase(kappa, now)
 
-        tx, ty = lookahead_point(est, cfg.lookahead_m)
-        if self.phase == TURN and cfg.racing_line_offset_m:
-            tx += math.copysign(cfg.racing_line_offset_m, kappa)  # toward the inside
-        steer = pure_pursuit(tx, ty, cfg.wheelbase_m, math.radians(cfg.max_steer_deg))
-        a = cfg.steer_smoothing
-        self._steer = a * self._steer + (1 - a) * steer
+        # How much "turn" is ahead: 0 = straight, 1 = full turn. Rises at
+        # once (slow down in time), falls with light smoothing (accelerate as
+        # the turn opens, without chattering).
+        span = max(cfg.turn_kappa_enter - cfg.turn_kappa_exit, 1e-6)
+        f_raw = min(1.0, max(0.0, (abs(kappa) - cfg.turn_kappa_exit) / span))
+        a_f = cfg.turn_factor_smoothing
+        self._f = f_raw if f_raw >= self._f else a_f * self._f + (1 - a_f) * f_raw
+        f = self._f
 
         if now < self._brake_until:
             throttle = cfg.brake_throttle
+        elif cfg.speed_blend:
+            throttle = cfg.straight_throttle + (cfg.turn_throttle - cfg.straight_throttle) * f
         elif self.phase == TURN:
             throttle = cfg.turn_throttle
         else:
             throttle = cfg.straight_throttle
-        return Command(self._steer, throttle, (tx, ty), kappa, self.phase)
+
+        # Longer lookahead at higher throttle keeps pure pursuit stable.
+        ld = cfg.lookahead_m + cfg.lookahead_speed_gain * max(0.0, throttle - cfg.lookahead_ref_throttle)
+        tx, ty = lookahead_point(est, ld)
+        if cfg.racing_line_offset_m:
+            tx += math.copysign(cfg.racing_line_offset_m * f, kappa)  # toward the inside
+        steer = pure_pursuit(tx, ty, cfg.wheelbase_m, math.radians(cfg.max_steer_deg))
+        a = cfg.steer_smoothing
+        self._steer = a * self._steer + (1 - a) * steer
+        return Command(self._steer, throttle, (tx, ty), kappa, self.phase, turn_factor=f)
 
     def _update_phase(self, kappa: float, now: float) -> None:
         cfg = self.cfg

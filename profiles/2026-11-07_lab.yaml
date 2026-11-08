@@ -58,15 +58,19 @@ control:
   max_steer_deg: 35
   lookahead_m: 0.7
   steer_smoothing: 0.0
-  straight_throttle: 0.4
-  turn_throttle: 0.36
+  straight_throttle: 0.41
+  turn_throttle: 0.38
   brake_preview_m: 0.7
   turn_kappa_enter: 0.85
   turn_kappa_exit: 0.6
   turn_exit_frames: 3
   brake_throttle: 0.0
   brake_time_s: 0.0
-  racing_line_offset_m: 0.0
+  racing_line_offset_m: 0.1
+  speed_blend: true
+  turn_factor_smoothing: 0.5
+  lookahead_speed_gain: 1.0
+  lookahead_ref_throttle: 0.36
   lost_hold_s: 0.25
 safety:
   deadman_button: rb

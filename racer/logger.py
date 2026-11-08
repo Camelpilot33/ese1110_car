@@ -45,14 +45,22 @@ class RunLogger:
             self.dropped += 1
 
     def event(self, kind: str, **data) -> None:
-        self._events.write(json.dumps({"t": time.monotonic(), "event": kind, **data}) + "\n")
-        self._events.flush()
+        """Queued like state rows: the control loop never touches the SD card."""
+        rec = {"t": time.monotonic(), "event": kind, **data}
+        try:
+            self._q.put_nowait(("event", rec))
+        except queue.Full:
+            self.dropped += 1
 
     def _run(self) -> None:
         while True:
             item = self._q.get()
             if item is None:
                 break
+            if item[0] == "event":
+                self._events.write(json.dumps(item[1], default=_jsonable) + "\n")
+                self._events.flush()
+                continue
             state, frame = item
             if frame is not None:
                 cv2.imwrite(str(self.dir / "frames" / f"{state['frame']:06d}.jpg"), frame,

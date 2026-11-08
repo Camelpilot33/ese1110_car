@@ -323,3 +323,40 @@ def test_straight_stays_straight_phase(prof):
     cmd = Controller(prof.control).update(est, 0.0)
     assert cmd.phase == "straight" and abs(cmd.kappa_preview) < 0.1
     assert cmd.throttle == prof.control.straight_throttle
+
+
+def test_logger_writes_state_events_frames(tmp_path, prof):
+    import json as _json
+    from racer.logger import RunLogger
+    log = RunLogger(tmp_path, "t", prof)
+    log.event("button", button="a")
+    log.log({"t": 1.0, "frame": 7, "x": np.float32(0.5)}, np.zeros((8, 8, 3), np.uint8))
+    log.close()
+    assert (log.dir / "frames" / "000007.jpg").exists()
+    assert _json.loads((log.dir / "state.jsonl").read_text())["x"] == 0.5
+    assert _json.loads((log.dir / "events.jsonl").read_text())["button"] == "a"
+
+
+def test_racing_line_offset_moves_target_inside(prof):
+    img = render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)])      # left turn
+    est = Vision(prof.vision, W, H).process(img)
+    base = Controller(prof.control).update(est, 0.0)
+    prof.control.racing_line_offset_m = 0.1
+    inside = Controller(prof.control).update(est, 0.0)
+    assert base.turn_factor > 0.5
+    assert inside.target[0] < base.target[0] - 0.04
+    assert inside.steering < base.steering
+
+
+def test_speed_blend_between_straight_and_turn(prof):
+    c = prof.control
+    c.straight_throttle, c.turn_throttle = 0.5, 0.3
+    est_s = Vision(prof.vision, W, H).process(render(prof, [straight(-0.3), straight(0.3)]))
+    est_t = Vision(prof.vision, W, H).process(render(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)]))
+    ctrl = Controller(c)
+    assert ctrl.update(est_s, 0.0).throttle == pytest.approx(0.5)
+    turn = ctrl.update(est_t, 0.1).throttle
+    assert 0.3 <= turn < 0.4
+    # leaving the turn: throttle recovers within a few frames
+    th = [ctrl.update(est_s, 0.2 + i * 0.03).throttle for i in range(6)]
+    assert th[0] > turn and th[-1] > 0.49
