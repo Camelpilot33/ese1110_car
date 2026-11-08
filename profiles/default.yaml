@@ -1,0 +1,79 @@
+name: default
+camera:
+  width: 320
+  height: 240
+  sensor_width: 640
+  sensor_height: 480
+  frame_rate: 60.0
+  hflip: true
+  vflip: true
+  exposure_us: null
+  analogue_gain: null
+  colour_gains: null
+vision:
+  mode: two_lines
+  hsv_lower: [0, 90, 90]
+  hsv_upper: [22, 255, 255]
+  roi_top: 0.4
+  roi_bottom: 0.95
+  row_step: 2
+  blur: 3
+  min_cluster_px: 2
+  max_range_m: 1.8
+  max_gap_m: 0.3
+  outlier_m: 0.06
+  track_width_m: 0.6
+  assoc_tolerance: 0.35
+  min_points: 4
+  lens:
+    fx: 0.42
+    fy: 0.56
+    cx: 0.5
+    cy: 0.5
+    k1: -0.3
+    k2: 0.08
+  geometry:
+    height_m: 0.12
+    pitch_deg: 12.0
+    x_offset_m: 0.2
+  ground_homography: null
+actuators:
+  i2c_bus: 1
+  pca9685_addr: 64
+  pwm_freq_hz: 60.0
+  steering_channel: 0
+  throttle_channel: 1
+  steering_left_us: 2035
+  steering_center_us: 1689
+  steering_right_us: 1343
+  throttle_forward_us: 2035
+  throttle_stop_us: 1506
+  throttle_reverse_us: 1302
+  throttle_max: 0.35
+  reverse_max: 0.5
+  ina219_addr: 66
+control:
+  wheelbase_m: 0.26
+  max_steer_deg: 25.0
+  lookahead_m: 0.6
+  steer_smoothing: 0.0
+  straight_throttle: 0.25
+  turn_throttle: 0.2
+  brake_preview_m: 1.2
+  turn_kappa_enter: 1.0
+  turn_kappa_exit: 0.6
+  turn_exit_frames: 3
+  brake_throttle: 0.0
+  brake_time_s: 0.0
+  racing_line_offset_m: 0.0
+  lost_hold_s: 0.25
+safety:
+  deadman_button: rb
+  estop_button: b
+  mode_button: x
+  lap_button: a
+  frame_timeout_s: 0.1
+  max_run_s: 0.0
+  battery_min_v: 7.0
+  manual_throttle_scale: 0.3
+  joystick_device: /dev/input/js0

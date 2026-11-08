@@ -1,0 +1,6 @@
+numpy<2
+opencv-python-headless
+pyyaml
+pytest
+# Pi only (preinstalled in ~/env): picamera2, smbus2
+smbus2
