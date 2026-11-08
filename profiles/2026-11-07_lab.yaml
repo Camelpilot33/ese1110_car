@@ -24,6 +24,7 @@ vision:
   outlier_m: 0.06
   track_width_m: 0.4
   track_direction: left
+  line_memory_frames: 20
   assoc_tolerance: 0.45
   min_points: 4
   lens:
@@ -61,8 +62,8 @@ control:
   i_limit: 0.5
   d_filter: 0.6
   max_error_deg: 60.0
-  speed_max: 0.52
-  speed_min: 0.38
+  speed_max: 0.55
+  speed_min: 0.4
   speed_turn_drop: 0.06
   speed_steer_drop: 0.04
   speed_error_drop: 0.05
@@ -78,7 +79,7 @@ control:
   turn_exit_frames: 3
   brake_throttle: 0.0
   brake_time_s: 0.0
-  racing_line_offset_m: 0.1
+  racing_line_offset_m: 0.2
   speed_blend: true
   turn_factor_smoothing: 0.5
   lookahead_speed_gain: 1.0

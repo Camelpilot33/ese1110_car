@@ -428,3 +428,20 @@ def test_lookahead_on_sharp_short_fit_stays_ahead(prof):
         assert y > 0.4, (coeffs, x, y)
         assert abs(math.degrees(math.atan2(x, y))) < 50
         assert x < 0          # path bends left -> target left
+
+
+def test_lone_inner_line_recognised_from_history(prof):
+    """Car hugging the inner line: outer line leaves the view. With recent
+    history of both lines the lone line must stay the LEFT (inner) one."""
+    prof.vision.track_direction = "left"
+    v = Vision(prof.vision, W, H)
+    w = prof.vision.track_width_m
+    est = v.process(render(prof, [straight(-0.12), straight(-0.12 + w)]))
+    assert len(est.left_pts) > 3 and len(est.right_pts) > 3
+    est = v.process(render(prof, [straight(-0.10)]))          # outer line gone
+    assert len(est.left_pts) > 3 and len(est.right_pts) == 0
+    assert est.x_at(0.6) > 0                                   # centre to the right of it
+    # without history it falls back to the outer-line rule
+    v2 = Vision(prof.vision, W, H)
+    est2 = v2.process(render(prof, [straight(-0.10)]))
+    assert len(est2.right_pts) > 3 and est2.x_at(0.6) < 0

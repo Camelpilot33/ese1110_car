@@ -24,6 +24,7 @@ vision:
   outlier_m: 0.06
   track_width_m: 0.6
   track_direction: both
+  line_memory_frames: 20
   assoc_tolerance: 0.35
   min_points: 4
   lens:

@@ -107,6 +107,9 @@ class Vision:
         self.lower = np.array(cfg.hsv_lower, dtype=np.uint8)
         self.upper = np.array(cfg.hsv_upper, dtype=np.uint8)
         self._prev_center = 0.0   # lateral centre at the nearest row, last frame
+        self._hist = None         # (left, right) near x when both lines were last seen
+        self._hist_age = 10 ** 6  # frames since then
+        self._lone = None         # (side, near x) of last frame's lone line
 
     def threshold(self, bgr: np.ndarray) -> np.ndarray:
         h = bgr.shape[0]
@@ -183,19 +186,48 @@ class Vision:
                 (lx if lx is not None else rx) + (w / 2 if lx is not None else -w / 2))
             centers.append(cpt)
 
-        # One-way track: a lone line is the OUTER one (for a left-only track the
-        # outer line sweeps across the view in every turn; the inner line
-        # leaves the field of view to the left).
-        if cfg.mode == "two_lines" and cfg.track_direction in ("left", "right"):
-            # "Lone" = the other side has only a few stray points.
-            def lone(a, b):
-                return len(a) >= cfg.min_points and len(b) < max(3, 0.15 * len(a))
-            if cfg.track_direction == "left" and lone(left, right):
-                right, left = left, []
-                centers = self._centers_from_line(right, -w / 2)
-            elif cfg.track_direction == "right" and lone(right, left):
-                left, right = right, []
-                centers = self._centers_from_line(left, +w / 2)
+        # Which line is a lone line? 1) if both lines were seen recently,
+        # the one whose near position it matches (handles the car hugging
+        # the inner line with the outer line out of view); 2) otherwise, on
+        # a one-way track it is the OUTER line (for a left-only track the
+        # outer line sweeps across the view in every turn).
+        def lone(a, b):            # "lone" = the other side has only a few stray points
+            return len(a) >= cfg.min_points and len(b) < max(3, 0.15 * len(a))
+
+        if cfg.mode == "two_lines":
+            line = left if lone(left, right) else right if lone(right, left) else None
+            if line is None:
+                self._lone = None
+                if len(left) >= cfg.min_points and len(right) >= cfg.min_points:
+                    xl, xr = self._near_x(left), self._near_x(right)
+                    if 0.75 * w <= xr - xl <= 1.4 * w:     # a plausible lane, not one line split in two
+                        self._hist = (xl, xr)
+                        self._hist_age = 0
+            else:
+                self._hist_age += 1
+                side = None
+                xn = self._near_x(line)
+                if self._lone is not None and abs(xn - self._lone[1]) < 0.4 * w:
+                    side = self._lone[0]                  # same lone line as last frame
+                elif self._hist is not None and self._hist_age <= cfg.line_memory_frames:
+                    side = "left" if abs(xn - self._hist[0]) < abs(xn - self._hist[1]) else "right"
+                elif cfg.track_direction == "left":
+                    side = "right"
+                elif cfg.track_direction == "right":
+                    side = "left"
+                if side == "left":
+                    left, right = line, []
+                    centers = self._centers_from_line(left, +w / 2)
+                elif side == "right":
+                    left, right = [], line
+                    centers = self._centers_from_line(right, -w / 2)
+                self._lone = (side, xn) if side else None
+                if side and self._hist is not None:
+                    # follow the matched line so a slow drift keeps its label
+                    # (the unseen line moves with it: the lane keeps its width)
+                    xn = self._near_x(line)
+                    d = xn - (self._hist[0] if side == "left" else self._hist[1])
+                    self._hist = (self._hist[0] + d, self._hist[1] + d)
 
         est.left_pts = np.array(left).reshape(-1, 2)
         est.right_pts = np.array(right).reshape(-1, 2)
@@ -221,6 +253,11 @@ class Vision:
 
     def reset(self) -> None:
         self._prev_center = 0.0
+        self._hist, self._hist_age, self._lone = None, 10 ** 6, None
+
+    @staticmethod
+    def _near_x(line: list) -> float:
+        return float(np.median([p[0] for p in line[:4]]))
 
     @classmethod
     def _centers_from_line(cls, line: list, dist: float) -> list:

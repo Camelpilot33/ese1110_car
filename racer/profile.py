@@ -68,6 +68,7 @@ class VisionCfg:
     track_width_m: float = 0.60      # distance between the two tape lines
     track_direction: str = "both"    # left | right | both: turn direction of a one-way track;
                                      # with left/right a lone visible line is taken as the outer line
+    line_memory_frames: int = 20     # a lone line is matched to the lines seen this recently (~0.3 s)
     assoc_tolerance: float = 0.35    # fraction of track width
     min_points: int = 4              # centre points needed for a valid estimate
     lens: LensCfg = field(default_factory=LensCfg)
