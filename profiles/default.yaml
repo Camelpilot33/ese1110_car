@@ -56,6 +56,7 @@ actuators:
   ina219_addr: 66
 control:
   mode: pure_pursuit
+  track_direction: both
   kp: 1.2
   ki: 0.3
   kd: 0.08

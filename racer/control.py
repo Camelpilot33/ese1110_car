@@ -48,9 +48,10 @@ def lookahead_point(est: TrackEstimate, ld: float) -> Tuple[float, float]:
     """First point along the path whose straight-line distance from the rear
     axle reaches ld. Walks the path (robust on sharp curves, where solving
     x(y)^2 + y^2 = ld^2 by iteration collapses to a point beside the car).
-    Extends at most 30 % past the farthest observed point."""
+    Never goes past the farthest observed point: extending a short, sharply
+    curved fit along its end tangent flipped the bend direction (run 10)."""
     y_lo = max(est.y_min, 0.05)
-    y_hi = max(est.y_max * 1.3, y_lo + 1e-3)
+    y_hi = max(est.y_max, y_lo + 1e-3)        # never past the farthest point actually seen
     ys = np.linspace(y_lo, y_hi, 60)
     xs = np.array([path_x(est, y) for y in ys])
     d = np.hypot(xs, ys)
@@ -137,7 +138,14 @@ class Controller:
         self._last_valid_t = now
 
         kappa = preview_curvature(est, cfg.brake_preview_m)
-        self._update_phase(kappa, now)
+        # One-way track: a bend the wrong way cannot exist, so such a reading
+        # is a bad measurement (seen in run 10 at a turn entry, where it made
+        # the car think it was on a straight and accelerate off the track).
+        # Hold the previous turn state instead of trusting it.
+        wrong_way = ((cfg.track_direction == "left" and kappa > 0) or
+                     (cfg.track_direction == "right" and kappa < 0))
+        if not wrong_way:
+            self._update_phase(kappa, now)
 
         # How much "turn" is ahead: 0 = straight, 1 = full turn. Rises at
         # once (slow down in time), falls with light smoothing (accelerate as
@@ -145,8 +153,14 @@ class Controller:
         span = max(cfg.turn_kappa_enter - cfg.turn_kappa_exit, 1e-6)
         f_raw = min(1.0, max(0.0, (abs(kappa) - cfg.turn_kappa_exit) / span))
         a_f = cfg.turn_factor_smoothing
-        self._f = f_raw if f_raw >= self._f else a_f * self._f + (1 - a_f) * f_raw
+        if wrong_way:
+            pass                                   # hold self._f
+        else:
+            self._f = f_raw if f_raw >= self._f else a_f * self._f + (1 - a_f) * f_raw
         f = self._f
+        if cfg.track_direction in ("left", "right"):
+            # inside of every turn is known: bias/offset signs never flip
+            kappa = -abs(kappa) if cfg.track_direction == "left" else abs(kappa)
 
         dt = 0.0 if self._last_t is None else min(now - self._last_t, 0.2)
         self._last_t = now

@@ -332,7 +332,7 @@ def test_logger_writes_state_events_frames(tmp_path, prof):
     log.event("button", button="a")
     log.log({"t": 1.0, "frame": 7, "x": np.float32(0.5)}, np.zeros((8, 8, 3), np.uint8))
     log.close()
-    assert (log.dir / "frames" / "000007.jpg").exists()
+    assert (log.dir / "frames" / "000007.png").exists()
     assert _json.loads((log.dir / "state.jsonl").read_text())["x"] == 0.5
     assert _json.loads((log.dir / "events.jsonl").read_text())["button"] == "a"
 
@@ -457,3 +457,26 @@ def test_turn_steer_bias_only_in_turns(prof):
     c.turn_steer_bias = 0.15
     assert Controller(c).update(est_t, 0.0).steering == pytest.approx(max(-1.0, base_t - 0.15), abs=1e-6)
     assert Controller(c).update(est_s, 0.0).steering == pytest.approx(base_s, abs=1e-6)
+
+
+def test_wrong_way_bend_ignored_on_left_track(prof):
+    """Run 10: a right-bend reading at a left-turn entry dropped the turn factor
+    and the car accelerated off the track. On a left-only track it must hold."""
+    from racer.vision import TrackEstimate
+    c = prof.control
+    c.mode, c.track_direction, c.turn_steer_bias = "pid", "left", 0.15
+    ctrl = Controller(c)
+    left = TrackEstimate(valid=True, coeffs=np.array([0.0, 0.0, -1.2]), y_min=0.2, y_max=0.75)
+    right = TrackEstimate(valid=True, coeffs=np.array([0.0, 0.0, +0.8]), y_min=0.2, y_max=0.75)
+    a = ctrl.update(left, 0.0)
+    assert a.turn_factor == pytest.approx(1.0)
+    b = ctrl.update(right, 0.02)                 # bogus right bend
+    assert b.turn_factor == pytest.approx(1.0)   # held
+    assert b.throttle < c.speed_max - 0.03       # still turn speed, not straight speed
+
+
+def test_lookahead_never_extrapolates(prof):
+    from racer.vision import TrackEstimate
+    est = TrackEstimate(valid=True, coeffs=np.array([0.0, 1.4, -2.7]), y_min=0.25, y_max=0.54)
+    x, y = lookahead_point(est, 0.7)
+    assert y <= 0.54 + 1e-9

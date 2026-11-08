@@ -101,7 +101,8 @@ class LogSource:
     def __init__(self, run_dir: str | Path):
         import cv2
         self._cv2 = cv2
-        self.paths = sorted((Path(run_dir) / "frames").glob("*.jpg"))
+        d = Path(run_dir) / "frames"
+        self.paths = sorted(list(d.glob("*.png")) + list(d.glob("*.jpg")))
         if not self.paths:
             raise FileNotFoundError(f"no frames in {run_dir}/frames")
 
