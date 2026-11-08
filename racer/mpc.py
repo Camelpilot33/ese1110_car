@@ -212,6 +212,12 @@ def plan_line(centre: np.ndarray, cfg: MpcCfg, half_width: float, kappa_prev: fl
     elif cfg.track_direction == "right":
         kc = np.abs(kc)
     g = cfg.w_len * (-kc) * ds
+    # Out-in-out: on straights pull the line to the OUTSIDE of the coming
+    # turns, so the car turns in from wide (bigger radius) and cuts inside.
+    if cfg.w_wide and cfg.track_direction in ("left", "right"):
+        straight = np.clip(1.0 - np.abs(kc) / cfg.kc_turn, 0.0, 1.0)
+        out = 1.0 if cfg.track_direction == "left" else -1.0      # outside = right on a left track
+        g = g - out * cfg.w_wide * straight * ds
 
     H = 2 * A.T @ A
     f = -2 * A.T @ b + g
@@ -356,9 +362,9 @@ class MpcController:
         plan.speed = prof
         dist = np.r_[0.0, np.cumsum(np.hypot(*np.diff(plan.points, axis=0).T))]
         v_target = float(np.interp(max(v, 0.3) * cfg.speed_lead_s, dist, prof))
+        # continuous: throttle for the target speed (the ESC/drivetrain lag does
+        # the smoothing); slowing down never goes below the rolling level
         thr = cfg.speed_offset + v_target / cfg.speed_gain
-        if v_target < v - cfg.brake_margin:
-            thr = cfg.thr_brake                                    # coast / brake
         thr = float(np.clip(thr, min(cfg.thr_min, cfg.thr_brake), cfg.thr_max))
         if thr < cfg.thr_min and v < 0.3:
             thr = cfg.thr_min                                       # never stall from rest

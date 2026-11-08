@@ -66,23 +66,24 @@ control:
     w_first: 1.0
     w_rate: 1.0
     w_centre: 0.05
-    w_len: 2000.0
+    w_len: 2500.0
     kc_deadband: 0.3
+    w_wide: 3000.0
+    kc_turn: 1.0
     track_lookahead_m: 0.45
     track_lookahead_per_v: 0.05
-    a_lat: 5.0
+    a_lat: 8.0
     a_brake: 3.0
     a_accel: 2.0
-    v_max: 2.6
+    v_max: 3.1
     r_unseen_m: 0.67
     speed_lead_s: 0.15
-    brake_margin: 0.15
     speed_skip_n: 2
     speed_gain: 7.0
     speed_offset: 0.18
     speed_tau_s: 0.3
     thr_min: 0.38
-    thr_max: 0.55
+    thr_max: 0.62
     thr_brake: 0.36
     thr_moving: 0.35
     understeer_k: 0.15

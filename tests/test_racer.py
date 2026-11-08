@@ -653,3 +653,17 @@ def test_speed_model_deadband():
     for _ in range(120):
         lt.predict(1 / 60, 0.0, 0.33)                           # below the moving threshold
     assert lt.v < 0.1
+
+
+def test_mpc_out_in_out(prof):
+    """Left track: wide (right) on a straight, inside (left) in the turn."""
+    from racer.mpc import plan_line
+    c = _mpc_cfg(prof)
+    c.mpc.track_direction = "left"
+    ys = np.linspace(0.3, 1.0, 15)
+    straight_line = np.c_[np.zeros_like(ys), ys]
+    ps = plan_line(straight_line, c.mpc, 0.3, 0.0)
+    assert np.mean(ps.offsets[3:]) > 0.05                        # outside on the straight
+    centre, _ = _centre(prof, [arc(-0.3, -0.7), arc(0.3, -1.3)])
+    pt = plan_line(centre, c.mpc, 0.3, 0.0)
+    assert pt.offsets[len(pt.offsets) // 2] < -0.05              # inside in the turn
