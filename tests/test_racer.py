@@ -732,3 +732,19 @@ def test_lab_redness_rejects_beige_floor(prof):
     assert floor_px > 100
     assert (e.mask[int(0.42 * H):int(0.47 * H), :60] > 0).sum() == 0
     assert len(e.left_pts) > 3 and len(e.right_pts) > 3        # tape still found
+
+
+def test_inner_weight_trusts_inner_line(prof):
+    """Right-turn track: with inner_weight 1.0 the centre follows the RIGHT
+    (inner) line minus half a lane, ignoring a mis-detected outer line."""
+    w = prof.vision.track_width_m
+    prof.vision.track_direction = "right"
+    img = render(prof, [straight(-0.3 - 0.08), straight(0.3)])     # outer line 8 cm too far out
+    mid = Vision(prof.vision, W, H).process(img).x_at(0.6)
+    prof.vision.inner_weight = 1.0
+    inner = Vision(prof.vision, W, H).process(img).x_at(0.6)
+    assert mid == pytest.approx(-0.04, abs=0.02)                    # midpoint pulled 4 cm left
+    assert inner == pytest.approx(0.3 - w / 2, abs=0.02)            # half a lane from the inner line
+    prof.vision.inner_weight = 0.75
+    blend = Vision(prof.vision, W, H).process(img).x_at(0.6)
+    assert mid < blend < inner

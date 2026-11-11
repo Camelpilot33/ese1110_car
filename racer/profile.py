@@ -74,6 +74,7 @@ class VisionCfg:
     track_direction: str = "both"    # left | right | both: turn direction of a one-way track;
                                      # with left/right a lone visible line is taken as the outer line
     line_memory_frames: int = 20     # a lone line is matched to the lines seen this recently (~0.3 s)
+    inner_weight: float = 0.5        # one-way track, both lines seen: 0.5 = midpoint, 1.0 = inner line only
     assoc_tolerance: float = 0.35    # fraction of track width
     min_points: int = 4              # centre points needed for a valid estimate
     lens: LensCfg = field(default_factory=LensCfg)

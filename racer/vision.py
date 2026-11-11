@@ -185,6 +185,7 @@ class Vision:
         tol = cfg.assoc_tolerance * w
         center = self._prev_center
         left, right, centers = [], [], []
+        both_rows = []                       # indices into centers where both lines were seen
         for a, b in zip(starts.tolist(), ends.tolist()):
             xs = g[a:b, 0]
             y = float(g[a:b, 1].mean())
@@ -210,6 +211,7 @@ class Vision:
                 right.append((rx, y))
             if lx is not None and rx is not None:
                 cpt = ((lx + rx) / 2, y)
+                both_rows.append(len(centers))
             elif lx is not None:
                 cpt = self._offset(left, +w / 2)
             elif rx is not None:
@@ -263,6 +265,27 @@ class Vision:
                     xn = self._near_x(line)
                     d = xn - (self._hist[0] if side == "left" else self._hist[1])
                     self._hist = (self._hist[0] + d, self._hist[1] + d)
+
+        # Trust the inner line more (it is detected more reliably): where both
+        # lines were seen, blend the midpoint with the point half a lane from a
+        # smooth fit of the inner line (perpendicular to it). inner_weight 0.5 =
+        # midpoint, 1.0 = inner line only.
+        inner = right if cfg.track_direction == "right" else left if cfg.track_direction == "left" else None
+        if cfg.inner_weight > 0.5 and inner is not None and len(inner) >= 6 and both_rows \
+                and len(left) >= 3 and len(right) >= 3:
+            ip = np.array(inner)
+            c = np.polyfit(ip[:, 1], ip[:, 0], 2 if len(ip) >= 8 else 1)
+            dc = np.polyder(c)
+            side = -1.0 if cfg.track_direction == "right" else 1.0     # centre lies left of a right inner line
+            b = min(1.0, 2 * cfg.inner_weight - 1)
+            for i in both_rows:
+                if i >= len(centers):
+                    continue
+                mx, y = centers[i]
+                xi, s_ = float(np.polyval(c, y)), float(np.polyval(dc, y))
+                nrm = 1.0 / math.sqrt(1 + s_ * s_)
+                px, py = xi + side * (w / 2) * nrm, y - side * (w / 2) * s_ * nrm
+                centers[i] = (b * px + (1 - b) * mx, b * py + (1 - b) * y)
 
         est.left_pts = np.array(left).reshape(-1, 2)
         est.right_pts = np.array(right).reshape(-1, 2)

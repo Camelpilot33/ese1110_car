@@ -29,6 +29,7 @@ vision:
   track_width_m: 0.4
   track_direction: right
   line_memory_frames: 20
+  inner_weight: 0.75
   assoc_tolerance: 0.45
   min_points: 4
   lens:
