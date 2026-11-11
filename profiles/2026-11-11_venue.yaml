@@ -108,8 +108,8 @@ control:
   d_filter: 0.6
   max_error_deg: 60.0
   turn_steer_bias: 0.15
-  speed_max: 0.46
-  speed_min: 0.38
+  speed_max: 0.36
+  speed_min: 0.36
   speed_turn_drop: 0.06
   speed_steer_drop: 0.04
   speed_error_drop: 0.05
