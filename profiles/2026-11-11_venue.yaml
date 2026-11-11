@@ -12,9 +12,9 @@ camera:
   colour_gains: [1.1181, 1.8779]
 vision:
   mode: two_lines
-  hsv_lower: [0, 49, 170]
+  hsv_lower: [0, 49, 110]
   hsv_upper: [23, 255, 255]
-  lab_a_min: 13.0
+  lab_a_min: 18.0
   roi_top: 0.4
   roi_bottom: 0.95
   row_step: 2
