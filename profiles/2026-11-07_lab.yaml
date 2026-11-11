@@ -95,7 +95,7 @@ control:
   track_direction: left
   steer_min: -1.476878612716763
   steer_max: 1.0
-  start_ramp_s: 1.5
+  start_ramp_s: 3.0
   kp: 1.0
   ki: 0.0
   kd: 0.1
