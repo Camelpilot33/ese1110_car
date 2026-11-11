@@ -57,6 +57,7 @@ class VisionCfg:
     mode: str = "two_lines"          # two_lines | center_line
     hsv_lower: List[int] = field(default_factory=lambda: [0, 90, 90])     # orange tape
     hsv_upper: List[int] = field(default_factory=lambda: [22, 255, 255])
+    lab_a_min: Optional[float] = None  # also require Lab a* (redness) >= this; rejects beige floors/walls
     roi_top: float = 0.40            # fraction of height; rows above are ignored
     roi_bottom: float = 0.95         # bumper posts are black, the colour threshold skips them
     row_step: int = 2                # scan every Nth row

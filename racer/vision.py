@@ -116,6 +116,11 @@ class Vision:
         top, bot = int(self.cfg.roi_top * h), int(self.cfg.roi_bottom * h)
         hsv = cv2.cvtColor(bgr[top:bot], cv2.COLOR_BGR2HSV)
         m = cv2.inRange(hsv, self.lower, self.upper)
+        if self.cfg.lab_a_min is not None:
+            # Redness (Lab a*): orange tape is redder than a beige/wooden floor or
+            # wall of the same hue band (venue 2026-11-11: floor a* <= 12, tape >= 12).
+            a = cv2.cvtColor(bgr[top:bot], cv2.COLOR_BGR2LAB)[:, :, 1]
+            m &= np.where(a >= 128 + self.cfg.lab_a_min, 255, 0).astype(np.uint8)
         if self.cfg.blur and self.cfg.blur > 1:
             m = cv2.medianBlur(m, self.cfg.blur | 1)
         mask = np.zeros(bgr.shape[:2], dtype=np.uint8)

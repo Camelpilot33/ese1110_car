@@ -716,3 +716,19 @@ def test_run_lap_logging_call_matches_logger():
     keys = set(re.findall(r'(\w+)=', call))
     params = inspect.signature(RunLogger.event).parameters
     assert not (keys & {n for n, p in params.items() if p.kind != p.POSITIONAL_ONLY and n != "data"})
+
+
+def test_lab_redness_rejects_beige_floor(prof):
+    """Venue 2026-11-11: a beige floor in the tape's hue band was taken for tape.
+    lab_a_min keeps the redder orange tape and drops the floor."""
+    img = render(prof, [straight(-0.3), straight(0.3)])
+    beige = (150, 185, 205)                                  # BGR, light tan floor
+    img[int(0.42 * H):int(0.47 * H), :60] = beige
+    prof.vision.hsv_lower, prof.vision.hsv_upper = [0, 40, 100], [25, 255, 255]
+    v = Vision(prof.vision, W, H)
+    floor_px = (v.process(img, keep_mask=True).mask[int(0.42 * H):int(0.47 * H), :60] > 0).sum()
+    prof.vision.lab_a_min = 13.0
+    e = Vision(prof.vision, W, H).process(img, keep_mask=True)
+    assert floor_px > 100
+    assert (e.mask[int(0.42 * H):int(0.47 * H), :60] > 0).sum() == 0
+    assert len(e.left_pts) > 3 and len(e.right_pts) > 3        # tape still found
