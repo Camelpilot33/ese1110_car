@@ -20,7 +20,7 @@ vision:
   tarp_v_min: 150
   roi_top: 0.4
   roi_bottom: 0.95
-  row_step: 2
+  row_step: 1
   blur: 3
   min_cluster_px: 2
   max_range_m: 1.8
