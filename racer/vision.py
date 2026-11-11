@@ -121,11 +121,41 @@ class Vision:
             # wall of the same hue band (venue 2026-11-11: floor a* <= 12, tape >= 12).
             a = cv2.cvtColor(bgr[top:bot], cv2.COLOR_BGR2LAB)[:, :, 1]
             m &= np.where(a >= 128 + self.cfg.lab_a_min, 255, 0).astype(np.uint8)
+        if self.cfg.tarp_enclosure_px:
+            # Tape lies ON the tarp: keep a pixel only if there is tarp on both
+            # sides of it (above+below, or left+right) within d px. A floor or
+            # wall beyond the tarp edge has tarp on one side at most, so the
+            # colour test can be loose enough for pale, washed-out far tape.
+            m &= self._enclosed(hsv)
         if self.cfg.blur and self.cfg.blur > 1:
             m = cv2.medianBlur(m, self.cfg.blur | 1)
         mask = np.zeros(bgr.shape[:2], dtype=np.uint8)
         mask[top:bot] = m
         return mask
+
+    def _enclosed(self, hsv: np.ndarray) -> np.ndarray:
+        cfg = self.cfg
+        d = int(cfg.tarp_enclosure_px)
+        tarp = ((hsv[..., 1] <= cfg.tarp_s_max) & (hsv[..., 2] >= cfg.tarp_v_min)).astype(np.uint8)
+
+        def toward(axis: int, before: bool) -> np.ndarray:
+            # 1 where tarp exists within d px on one side of the pixel
+            if axis == 0:
+                k = np.zeros((2 * d + 1, 1), np.uint8)
+                if before:
+                    k[d + 1:, 0] = 1
+                else:
+                    k[:d, 0] = 1
+            else:
+                k = np.zeros((1, 2 * d + 1), np.uint8)
+                if before:
+                    k[0, d + 1:] = 1
+                else:
+                    k[0, :d] = 1
+            return cv2.dilate(tarp, k)
+
+        enc = (toward(0, True) & toward(0, False)) | (toward(1, True) & toward(1, False))
+        return np.where(enc > 0, 255, 0).astype(np.uint8)
 
     def process(self, bgr: np.ndarray, keep_mask: bool = False) -> TrackEstimate:
         cfg = self.cfg

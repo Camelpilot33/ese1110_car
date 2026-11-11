@@ -58,6 +58,10 @@ class VisionCfg:
     hsv_lower: List[int] = field(default_factory=lambda: [0, 90, 90])     # orange tape
     hsv_upper: List[int] = field(default_factory=lambda: [22, 255, 255])
     lab_a_min: Optional[float] = None  # also require Lab a* (redness) >= this; rejects beige floors/walls
+    tarp_enclosure_px: int = 0       # EXPERIMENTAL, off: >0 = tape pixels need tarp on both sides within this many px
+                                     # (venue 2026-11-11: recovered some pale far tape but let wall blobs back in)
+    tarp_s_max: int = 70             # tarp = low saturation ...
+    tarp_v_min: int = 150            # ... and bright
     roi_top: float = 0.40            # fraction of height; rows above are ignored
     roi_bottom: float = 0.95         # bumper posts are black, the colour threshold skips them
     row_step: int = 2                # scan every Nth row
