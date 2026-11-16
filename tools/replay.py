@@ -65,6 +65,9 @@ def main():
     n = valid = 0
     proc_ms, steer, diffs, phases = [], [], [], {"straight": 0, "turn": 0}
     for i, (idx, img) in enumerate(src):
+        if img is None:  # truncated/corrupt frame on disk
+            print(f"skipping unreadable frame {idx}", file=sys.stderr)
+            continue
         st = states.get(idx, {})
         now = st.get("t", i / args.fps)
         t0 = time.perf_counter()
